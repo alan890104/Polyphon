@@ -1,6 +1,6 @@
-// Drum kit and percussion: swept sines for drum bodies, filtered noise for snares and shakers, 808-style metal for cymbals.
+// Drum kit and percussion: membrane modes for drum bodies, filtered noise for snares and shakers, blooming bands of noise and 808-style metal for cymbals.
 
-import { Biquad, normalize, rng } from './core.ts';
+import { Biquad, normalize, rng, tailFade } from './core.ts';
 import { modal, type ModalPartial } from './modal.ts';
 
 type Gen = (sr: number, m: number, seed: number) => Float32Array;
@@ -63,16 +63,91 @@ function metal(y: Float32Array, sr: number, base: number, amp: number, t60: numb
   }
 }
 
+/** A band of a cymbal's wash: [centre Hz, level, bloom seconds, T60 seconds] */
+type WashBand = [number, number, number, number];
+
+/**
+ * A cymbal's wash: its thousands of closely spaced modes, as bands of noise, with metal's square-wave tones mixed into the bands above 3 kHz.
+ * The stick excites the low modes first and the plate's nonlinearity hands the energy upward over the first tens of milliseconds (the build-up:
+ * the higher a band, the later it blooms), while damping grows with frequency, so the highs also die first and the tail settles into a lower hum.
+ */
+function wash(y: Float32Array, sr: number, seed: number, base: number, metalMix: number, bands: WashBand[]): void {
+  const n = y.length;
+  const r = rng(seed);
+  const nz = new Float32Array(n);
+  const sq = new Float32Array(n);
+  for (let i = 0; i < n; i++) nz[i] = r();
+  for (const ratio of [1, 1.483, 1.804, 2.546, 2.63, 3.897]) {
+    const d = (base * ratio) / sr;
+    let ph = 0;
+    for (let i = 0; i < n; i++) {
+      ph += d;
+      if (ph >= 1) ph -= 1;
+      sq[i] += ph < 0.5 ? 1 / 6 : -1 / 6;
+    }
+  }
+  for (const [fc, level, bloom, t60] of bands) {
+    const a = new Biquad(sr, 'bp', fc, 0.9);
+    const b = new Biquad(sr, 'bp', fc, 0.9);
+    const mix = fc >= 3000 ? metalMix : 0;
+    const k = decay(sr, t60);
+    const kr = Math.exp(-1 / (bloom * sr));
+    let env = level;
+    let rise = 1;
+    for (let i = 0; i < n && env > 1e-6; i++) {
+      y[i] += b.run(a.run(nz[i] + mix * sq[i])) * env * (1 - rise);
+      env *= k;
+      rise *= kr;
+    }
+  }
+}
+
+/** A well-mixed number in [0, 1) for each variant (the first outputs of rng for nearby seeds are alike) */
+function vary(s: number): number {
+  const r = rng((s * 2654435761) >>> 0);
+  r();
+  return (r() + 1) / 2;
+}
+
+/** Bessel function of the first kind J_m(x): the shape of a drumhead's modes (integral form) */
+function besselJ(m: number, x: number): number {
+  let s = 0;
+  for (let i = 0; i < 48; i++) {
+    const t = (Math.PI * (i + 0.5)) / 48;
+    s += Math.cos(m * t - x * Math.sin(t));
+  }
+  return s / 48;
+}
+
+/** A drumhead mode: [frequency ratio, order m, Bessel zero j_mn, radiated weight, T60 seconds] */
+type HeadMode = [number, number, number, number, number];
+
+/**
+ * A struck drumhead: the modes of a circular membrane, each excited by how far it moves where the stick lands (J_m(j_mn·r/a), r/a = x),
+ * all gliding down together. The strike stretches the head and raises its tension with the square of the displacement,
+ * so the pitch starts a little high and settles about twice as fast as the sound dies (time constant ≈ T60/14).
+ */
+function head(y: Float32Array, sr: number, f: number, x: number, modes: HeadMode[], glide: number): void {
+  const ref = Math.abs(besselJ(modes[0][1], modes[0][2] * x));
+  const tf = modes[0][4] / 14;
+  for (const [ratio, m, j, w, t60] of modes) sweep(y, sr, f * ratio * glide, f * ratio, tf, (w * Math.abs(besselJ(m, j * x))) / ref, t60);
+}
+
 const sat = (y: Float32Array, drive: number): Float32Array => {
   for (let i = 0; i < y.length; i++) y[i] = Math.tanh(y[i] * drive) / Math.tanh(drive);
   return y;
 };
 
 export const DRUMS = {
+  /**
+   * Kick: a beater on a big, slack head. The body settles at about 52 Hz after a short glide (the strike stretches the head),
+   * and the beater's impact is a brief click around 3 kHz, the part of a kick that is heard through a mix.
+   */
   kick: (sr, _m, s) => {
     const y = buf(sr, 0.5);
-    sweep(y, sr, 170, 46, 0.03, 1, 0.45);
+    sweep(y, sr, 130, 52, 0.02, 1, 0.45);
     noiseHit(y, sr, s, [['lp', 6000]], 0.25, 0.012);
+    noiseHit(y, sr, s + 1, [['bp', 3200, 0.9]], 0.8 + 0.3 * vary(s), 0.008);
     return sat(y, 1.6);
   },
   /** Long-tailed bass drum (the ground rumble of electronic and epic music) */
@@ -113,24 +188,27 @@ export const DRUMS = {
     noiseHit(y, sr, s, [['hp', 8000]], 0.25, 0.04);
     return y;
   },
+  /** Open hi-hat: two small, thin cymbals rattling against each other; their wash blooms within a few milliseconds and the highest band fades first */
   ohat: (sr, _m, s) => {
     const y = buf(sr, 0.6);
-    metal(y, sr, 330, 0.6, 0.45, 6500);
-    noiseHit(y, sr, s, [['hp', 7000]], 0.2, 0.35);
-    return y;
+    wash(y, sr, s, 330, 1.5, [[2500, 0.02, 0.0005, 0.7], [4500, 0.055, 0.002, 0.6], [7000, 0.17, 0.005, 0.5], [10000, 0.35, 0.01, 0.42], [14000, 0.48, 0.018, 0.34]]);
+    noiseHit(y, sr, s + 1, [['hp', 7000]], 0.16, 0.05);
+    return tailFade(y, sr);
   },
+  /** Ride: a thick cymbal played on the bow. The stick's ping and the bell's tone come first; the wash builds up slowly under them and its highs fade first */
   ride: (sr, _m, s) => {
     const y = buf(sr, 2.2);
-    metal(y, sr, 410, 0.35, 1.8, 4000);
+    wash(y, sr, s, 410, 1, [[1500, 0.03, 0.001, 2.4], [3000, 0.13, 0.005, 2.2], [5000, 0.22, 0.02, 1.9], [8000, 0.3, 0.045, 1.5], [12000, 0.25, 0.07, 1.1]]);
     sweep(y, sr, 3400, 3400, 1, 0.08, 1.2);
-    noiseHit(y, sr, s, [['hp', 6000]], 0.1, 0.6);
-    return y;
+    noiseHit(y, sr, s + 1, [['bp', 5000, 0.8]], 0.3, 0.02);
+    return tailFade(y, sr);
   },
+  /** Crash: the stick's strike, then the wash blooms upward over the first ~100 ms; the highs fade within about a second and a low hum rings on */
   crash: (sr, _m, s) => {
     const y = buf(sr, 3.2);
-    metal(y, sr, 290, 0.35, 2.4, 3500);
-    noiseHit(y, sr, s, [['hp', 3000], ['lp', 12000]], 0.7, 2.6, 0.003);
-    return y;
+    wash(y, sr, s, 290, 0.6, [[450, 0.16, 0.0005, 4], [900, 0.23, 0.001, 3.6], [1800, 0.45, 0.002, 3.2], [3500, 0.9, 0.006, 2.8], [6000, 1, 0.02, 2.2], [9000, 0.95, 0.035, 1.5], [13000, 0.8, 0.05, 1]]);
+    noiseHit(y, sr, s + 1, [['bp', 2500, 0.7]], 0.6, 0.03);
+    return tailFade(y, sr);
   },
   /** Reversed cymbal: sucked in toward the next beat */
   swell: (sr, m, s): Float32Array => {
@@ -151,14 +229,16 @@ export const DRUMS = {
     noiseHit(y, sr, s, [['hp', 6000]], 0.3, 0.16);
     return y;
   },
-  /** Taiko: big and low, the slap of leather + a long drum body */
+  /**
+   * Taiko: two thick cowhide heads on a hollowed trunk, struck near the centre with heavy bachi. The deep (0,1) mode carries the sound,
+   * the (1,1) and (2,1) above it fade sooner, the slack hide makes the pitch sag as the strike's stretch relaxes, and the hardwood bachi slaps the hide.
+   */
   taiko: (sr, m, s) => {
     const y = buf(sr, 1.4);
     const f = m ? 440 * Math.pow(2, (m - 69) / 12) : 62;
-    sweep(y, sr, f * 1.6, f, 0.025, 1, 1.1);
-    sweep(y, sr, f * 2.6, f * 1.52, 0.02, 0.25, 0.4);
+    head(y, sr, f, 0.15 + 0.2 * vary(s), [[1, 0, 2.405, 1, 1.1], [1.52, 1, 3.832, 0.6, 0.4], [2.1, 2, 5.136, 0.3, 0.25]], 1.12);
     noiseHit(y, sr, s, [['lp', 900]], 0.5, 0.08);
-    noiseHit(y, sr, s + 1, [['bp', 2200, 0.8]], 0.12, 0.03);
+    noiseHit(y, sr, s + 1, [['bp', 1800, 0.8]], 0.9, 0.02);
     return sat(y, 1.5);
   },
   /** Frame drum (a tambourine without jingles, the hand drum): a low thud + the slap of fingers */
@@ -181,18 +261,39 @@ export const DRUMS = {
     }
     return y;
   },
+  /**
+   * Tom: a stick on a tensioned head. The (0,1) mode is the pitch; the (1,1), (2,1), (0,2) and (3,1) modes above it (ideal-membrane ratios) die sooner
+   * and make it a drum rather than a sine. The strike's stretch raises the pitch about two semitones at first; the stick's tip adds a short slap.
+   */
   tom: (sr, m, s) => {
     const y = buf(sr, 0.8);
     const f = m ? 440 * Math.pow(2, (m - 69) / 12) : 110;
-    sweep(y, sr, f * 1.5, f, 0.04, 1, 0.55);
+    // Bigger, lower toms ring longer
+    const t = 0.55 * Math.pow(110 / f, 0.3);
+    // The stick lands between the centre and halfway out
+    head(y, sr, f, 0.3 + 0.25 * vary(s), [[1, 0, 2.405, 1, t], [1.59, 1, 3.832, 0.5, t * 0.6], [2.14, 2, 5.136, 0.35, t * 0.45], [2.3, 0, 5.52, 0.4, t * 0.35], [2.65, 3, 6.38, 0.25, t * 0.35]], 1.12);
     noiseHit(y, sr, s, [['bp', 1100, 0.8]], 0.2, 0.05);
+    noiseHit(y, sr, s + 1, [['bp', 2800, 0.8]], 1.3, 0.015);
     return sat(y, 1.3);
   },
-  /** Timpani: slightly inharmonic partials, mallet-head noise */
+  /**
+   * Timpani: the air in the kettle loads the head so that its (1,1) to (5,1) modes fall at about 1 : 1.5 : 1.98 : 2.44 : 2.9 (Rossing),
+   * a near-harmonic series that gives the drum its pitch; the (1,1) rings longest (2-3 s, longer on the big drums).
+   * The symmetric modes pump air in and out of the kettle and die within a few tenths of a second: with the felt, they are the low thud of the stroke.
+   * Each variant lands at a slightly different distance from the rim, which changes how strongly each mode is excited (J_m(j_m1·r/a)), so a roll does not repeat itself.
+   */
   timpani: (sr, m, s) => {
     const f = m ? 440 * Math.pow(2, (m - 69) / 12) : 73;
-    const y = modal(sr, f, [[1, 1, 2.2], [1.504, 0.55, 1.4], [1.742, 0.3, 1.1], [2.0, 0.25, 0.9], [2.245, 0.15, 0.7]], { len: 2.4, bend: 1.03, bendT: 0.03, click: { amp: 0.25, t: 0.06, hz: 380, q: 0.7 }, seed: s });
-    return y;
+    // Strike point, as a fraction of the radius from the centre: a hand's breadth in from the rim
+    const x = 0.6 + 0.1 * vary(s);
+    const t11 = 2.4 * Math.pow(110 / f, 0.3);
+    // [ratio, order m, Bessel zero j_m1, radiated weight, T60 as a fraction of the (1,1)'s]; the weight is what is left after the felt and the radiation efficiency of each mode
+    const series: [number, number, number, number, number][] = [[1, 1, 3.832, 1, 1], [1.5, 2, 5.136, 0.6, 0.65], [1.98, 3, 6.38, 0.45, 0.45], [2.44, 4, 7.588, 0.35, 0.33], [2.9, 5, 8.771, 0.25, 0.25]];
+    const ref = besselJ(1, 3.832 * x);
+    const parts: ModalPartial[] = series.map(([ratio, mm, j, w, td]) => [ratio, (w * besselJ(mm, j * x)) / ref, t11 * td]);
+    // The inharmonic (0,2) and (2,2) modes: excited, but quickly damped by the air
+    parts.push([1.74, 0.3 * Math.abs(besselJ(0, 5.52 * x) / ref), 0.4], [2.2, 0.12, 0.35]);
+    return modal(sr, f, parts, { len: Math.min(4, t11 + 0.4), bend: 1.03, bendT: 0.03, click: { amp: 0.22, t: 0.08, hz: 1.4, q: 0.8 }, seed: s });
   },
   woodblock: (sr, m, s) => {
     const f = m ? 440 * Math.pow(2, (m - 69) / 12) : 1100;

@@ -200,7 +200,7 @@ How they are made:
 - **Bowed strings**: every player in a section is rendered separately, with their own intonation, vibrato, bowing point and bow noise, through a body with dozens of resonances. The sustain loops seamlessly.
 - **Mallets and bells**: modal synthesis with measured partial ratios (church bells have hum, prime, tierce, quint and nominal).
 - **Winds, brass and voices**: live oscillators with harmonic tables, breath noise, formant filters (choirs sing vowels) and per-note vibrato.
-- **Drums**: swept sines, filtered noise and 808-style metal, with random variants so repeated hits never sound identical.
+- **Drums**: drumheads as circular-membrane modes that glide as the head settles, with the stick or beater's click; timpani tuned by the air in the kettle (modes near 1 : 1.5 : 2 : 2.5 : 3); cymbal washes that bloom upward after the strike and lose their highs first; velocity-dependent brightness; and random variants, so repeated hits never sound identical.
 - **Rooms**: a procedural convolution reverb per song.
 
 Your own instruments:

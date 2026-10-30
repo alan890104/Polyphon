@@ -30,7 +30,12 @@ const PIANO_AFTER_RING: [number, number] = [0.063, 1.1];
 const pianoDamper = (m: number): number => (m >= 90 ? Infinity : m < 45 ? 0.45 : m < 70 ? 0.25 : 0.16);
 
 const S = (render: Render, level: number, hold: 'ring' | 'damp' = 'ring', release = 0.2): SampledInstrument => ({ kind: 'sample', render, hold, level, release });
-const D = (name: keyof typeof DRUMS, level: number, fixed?: number, variants = 3): SampledInstrument => ({ kind: 'sample', render: (sr, m, v) => DRUMS[name](sr, m, 1000 + v * 17 + m), hold: 'ring', level, variants, fixed });
+const D = (name: keyof typeof DRUMS, level: number, fixed?: number, variants = 3, tone?: (m: number, v: number) => number): SampledInstrument => ({ kind: 'sample', render: (sr, m, v) => DRUMS[name](sr, m, 1000 + v * 17 + m), hold: 'ring', level, variants, fixed, ...(tone && { tone }) });
+/**
+ * Drums are rendered at a forte stroke. A softer stroke drives the head or plate less hard and a felt mallet stays on longer, so fewer high modes sound
+ * (a cymbal barely starts the cascade that carries its energy upward): velocity rolls off the highs above `top` Hz, down to `floor` of it for the softest stroke
+ */
+const stroke = (top: number | ((m: number) => number), floor: number) => (m: number, v: number): number => (typeof top === 'number' ? top : top(m)) * (floor + (1 - floor) * Math.pow(v, 2.5));
 
 const SAMPLED = {
   // ── Plucked strings
@@ -67,24 +72,24 @@ const SAMPLED = {
     return d;
   }, 0.6),
   // ── Drums (pitch is passed to tuned drums)
-  kick: D('kick', 0.9, 36),
+  kick: D('kick', 0.9, 36, 3, stroke(8000, 0.08)),
   boom: D('boom', 0.9, 36, 2),
-  snare: D('snare', 0.55, 38),
-  field: D('field', 0.5, 38),
-  rim: D('rim', 0.4, 37),
+  snare: D('snare', 0.55, 38, 3, stroke(18000, 0.25)),
+  field: D('field', 0.5, 38, 3, stroke(18000, 0.25)),
+  rim: D('rim', 0.4, 37, 3, stroke(18000, 0.25)),
   clap: D('clap', 0.9, 39),
   hat: D('hat', 0.6, 42, 4),
-  ohat: D('ohat', 0.55, 46),
-  ride: D('ride', 0.5, 51, 2),
-  crash: D('crash', 0.3, 49, 2),
+  ohat: D('ohat', 0.55, 46, 3, stroke(22000, 0.35)),
+  ride: D('ride', 0.5, 51, 2, stroke(22000, 0.3)),
+  crash: D('crash', 0.3, 49, 2, stroke(22000, 0.25)),
   swell: D('swell', 0.3, 49, 1),
   shaker: D('shaker', 0.25, 70, 4),
   tamb: D('tamb', 0.45, 54),
-  taiko: D('taiko', 0.95),
-  frame: D('frame', 0.7),
-  darbuka: D('darbuka', 0.6),
-  tom: D('tom', 0.7),
-  timpani: D('timpani', 0.75),
+  taiko: D('taiko', 0.95, undefined, 3, stroke(8000, 0.08)),
+  frame: D('frame', 0.7, undefined, 3, stroke(8000, 0.08)),
+  darbuka: D('darbuka', 0.6, undefined, 3, stroke(8000, 0.08)),
+  tom: D('tom', 0.7, undefined, 3, stroke(8000, 0.08)),
+  timpani: D('timpani', 0.8, undefined, 4, stroke((m) => 8 * f0(m || 38), 0.15)),
   woodblock: D('woodblock', 0.4),
   clave: D('clave', 0.3, 75),
   anvil: D('anvil', 0.3),
