@@ -3,8 +3,8 @@
 import type { SampledInstrument } from '../instruments/definition.ts';
 import { getInstrument } from '../instruments/registry.ts';
 import { bowLayers, type SampleRequest } from '../instruments/samples.ts';
-import { stepsPerBar, type Meter } from '../notation/part.ts';
-import { trackPart, type Song } from '../song.ts';
+import type { Meter } from '../notation/part.ts';
+import { sectionSteps, trackPart, type Song } from '../song.ts';
 
 /** A note ready to schedule */
 export interface ScheduledNote {
@@ -28,10 +28,8 @@ export interface CompiledSection {
 
 /** Compile one section into sorted notes; shorter tracks repeat to fill the whole section */
 export function compileSection(tracks: Song['tracks'], meter: Meter): CompiledSection {
-  const bar = stepsPerBar(meter);
   const parts = tracks.map((t) => trackPart(t, meter));
-  const longest = Math.max(bar, ...parts.map((p) => p.duration));
-  const duration = Math.ceil(longest / bar - 1e-6) * bar;
+  const duration = sectionSteps(parts, meter);
   const notes: ScheduledNote[] = [];
   tracks.forEach((track, ti) => {
     const p = parts[ti];

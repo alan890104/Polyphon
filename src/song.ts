@@ -104,10 +104,10 @@ export function trackPart(track: Track, meter: Meter): Part {
   return typeof track.part === 'string' ? melody(track.part, meter) : track.part;
 }
 
-/** Length of one section: its longest track, rounded up to whole bars (at least one bar) */
-export function sectionSteps(tracks: Track[], meter: Meter): number {
+/** Length of a section whose tracks have these parts: the longest, rounded up to whole bars (at least one bar) */
+export function sectionSteps(parts: Part[], meter: Meter): number {
   const bar = stepsPerBar(meter);
-  const longest = Math.max(bar, ...tracks.map((t) => trackPart(t, meter).duration));
+  const longest = Math.max(bar, ...parts.map((p) => p.duration));
   return Math.ceil(longest / bar - 1e-6) * bar;
 }
 
@@ -115,8 +115,6 @@ export function sectionSteps(tracks: Track[], meter: Meter): number {
 export function songDuration(song: Song): { intro: number; loop: number } {
   const step = 60 / song.bpm / 4;
   const meter = song.meter ?? 16;
-  return {
-    intro: song.intro?.length ? sectionSteps(song.intro, meter) * step : 0,
-    loop: sectionSteps(song.tracks, meter) * step,
-  };
+  const steps = (tracks: Track[]) => sectionSteps(tracks.map((t) => trackPart(t, meter)), meter);
+  return { intro: song.intro?.length ? steps(song.intro) * step : 0, loop: steps(song.tracks) * step };
 }
