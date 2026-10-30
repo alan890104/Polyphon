@@ -25,7 +25,7 @@ function pianoB(m: number): number {
 }
 
 /** Seconds for the tail to decay 60 dB (fundamental) */
-export const pianoSustain = (m: number): number => Math.min(30, Math.max(0.9, 30 * Math.pow(2, -(m - 21) / 19)));
+export const pianoSustain = (m: number): number => Math.min(30, Math.max(1.2, 30 * Math.pow(2, -(m - 21) / 24)));
 
 /** Frequency response of the soundboard and body (dB): shared by every note of the same piano */
 let boardDb: ((f: number) => number) | null = null;
@@ -75,9 +75,10 @@ export function piano(sr: number, m: number, soft = false): Float32Array {
   // Hammer strike point (as a fraction of string length): about 1/8 for the bass, about 1/13 for the treble
   const beta = 1 / (8 + Math.max(0, m - 21) * 0.058);
   // Decay: σ = base loss + b3·ω²; the early stage (handed over to the soundboard) is fast, the later stage (the tail) is slow
-  const Tf = Ts / 3.2;
-  const prompt = soft ? 0.66 : 0.72;
-  const b3 = soft ? 1.4e-9 : 0.9e-9;
+  const Tf = Ts / 2;
+  const prompt = soft ? 0.55 : 0.6;
+  // Frequency-dependent loss at the level measured on real strings (Chaigne and Askenfelt): the highs die well before the fundamental
+  const b3 = soft ? 9e-9 : 6e-9;
   for (let p = 1; p < 400; p++) {
     const fp = p * f0 * Math.sqrt(1 + B * p * p);
     if (fp > nyq) break;
@@ -139,7 +140,7 @@ export function piano(sr: number, m: number, soft = false): Float32Array {
   }
   // The hammer's scrape: mid-high frequencies, a few milliseconds
   const hb = new Biquad(sr, 'bp', Math.min(5000, 1400 + f0 * 2), 0.9);
-  let he = rms * (soft ? 0.25 : 0.6);
+  let he = rms * (soft ? 0.12 : 0.3);
   const hk = Math.pow(10, -3 / (0.006 * sr));
   for (let i = 0; i < n && he > 1e-6; i++) {
     y[i] += hb.run(r()) * he;

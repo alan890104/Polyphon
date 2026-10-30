@@ -54,21 +54,36 @@ export function playNote(name: string, c: NoteCall): void {
     return;
   }
   g.gain.value = amp;
+  let out: AudioNode = c.out;
+  if (def.spread) {
+    const pan = c.ctx.createStereoPanner();
+    pan.pan.value = Math.max(-1, Math.min(1, (c.m - 64) / 36)) * def.spread;
+    pan.connect(c.out);
+    out = pan;
+  }
   if (def.tone) {
     const lp = c.ctx.createBiquadFilter();
     lp.type = 'lowpass';
     lp.frequency.value = Math.min(c.ctx.sampleRate * 0.45, def.tone(c.m, c.vel));
     // The Web Audio low-pass Q is the resonance in decibels: -3 dB is roughly Butterworth, with no nasal tone
     lp.Q.value = -3;
-    src.connect(lp).connect(g).connect(c.out);
-  } else src.connect(g).connect(c.out);
+    src.connect(lp).connect(g).connect(out);
+  } else src.connect(g).connect(out);
   src.start(c.t);
   const r = c.params?.release ?? def.damper?.(c.m) ?? def.release ?? 0.2;
   if (def.hold === 'damp' && !(c.params?.ring ?? 0) && r !== Infinity) {
     const off = c.t + Math.max(def.minHold ?? 0.03, c.dur);
     g.gain.setValueAtTime(amp, off);
-    g.gain.setTargetAtTime(1e-4, off, r / 4);
-    src.stop(Math.min(off + r * 1.5, c.t + b.duration));
+    if (def.afterRing) {
+      // The damper stops the string quickly, but a faint ring stays a moment longer
+      const [level, fade] = def.afterRing;
+      g.gain.setTargetAtTime(amp * level, off, r / 4);
+      g.gain.setTargetAtTime(1e-4, off + r, fade / 6.9);
+      src.stop(Math.min(off + r + fade, c.t + b.duration));
+    } else {
+      g.gain.setTargetAtTime(1e-4, off, r / 4);
+      src.stop(Math.min(off + r * 1.5, c.t + b.duration));
+    }
   } else src.stop(c.t + b.duration);
 }
 

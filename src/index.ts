@@ -9,7 +9,7 @@
 
 export { melody, rhythm, type RhythmOptions } from './notation/melody.ts';
 export { chords, chordsDuration, pad, arpeggio, roots, bassline, strum, type Chord, type PadOptions, type ArpeggioOptions, type RootsOptions, type BasslineOptions, type StrumOptions } from './notation/harmony.ts';
-export { sequence, stack, repeat, rest, transpose, mapPitch, scaleVelocity, slice } from './notation/transform.ts';
+export { sequence, stack, repeat, rest, transpose, mapPitch, scaleVelocity, slice, pedal } from './notation/transform.ts';
 export { stepsPerBar, VELOCITY, type Note, type Part, type Meter } from './notation/part.ts';
 export { midi, frequency, noteName, parseChord, voiceChord, scaleDegree, remapToMode, romanChord, MODES, type Pitch, type Mode, type ChordInfo, type VoicingOptions } from './theory.ts';
 

@@ -24,6 +24,8 @@ function modalInst(parts: ModalPartial[], len: number, extra: Omit<Parameters<ty
 
 /** The piano's velocity timbre: the softer the strike, the longer the hammer stays on the string and the fewer the highs (low-pass cutoff, Hz) */
 const pianoTone = (m: number, v: number): number => 900 * Math.pow(2, (m - 40) / 24) * (1 + 14 * Math.pow(v, 2.5));
+/** After the dampers land, the soundboard and the undamped treble strings keep a faint ring (-24 dB, fading over a second) */
+const PIANO_AFTER_RING: [number, number] = [0.063, 1.1];
 /** Piano dampers: bass strings are thick and settle slowly; the highest section (above F#6) has no damper */
 const pianoDamper = (m: number): number => (m >= 90 ? Infinity : m < 45 ? 0.45 : m < 70 ? 0.25 : 0.16);
 
@@ -54,9 +56,9 @@ const SAMPLED = {
   /** Tubular bell: brighter, shorter */
   chime: S((sr, m) => modal(sr, f0(m), [[1, 1, 3.5], [2.76, 0.5, 2], [5.4, 0.3, 1.2], [8.93, 0.12, 0.6]], { len: 4, click: { amp: 0.25, t: 0.006, hz: 5000 } }), 0.35),
   steelpan: S(modalInst([[1, 1, 1.4], [2, 0.55, 0.9], [3, 0.22, 0.5], [4.02, 0.1, 0.3]], 1.8, { bend: 1.02, bendT: 0.02, click: { amp: 0.1, t: 0.008, hz: 2500 } }), 0.5),
-  piano: { ...S((sr, m) => piano(sr, m), 0.75, 'damp', 0.3), tone: (m, v) => pianoTone(m, v), damper: pianoDamper },
+  piano: { ...S((sr, m) => piano(sr, m), 0.75, 'damp', 0.3), tone: (m, v) => pianoTone(m, v), damper: pianoDamper, afterRing: PIANO_AFTER_RING, spread: 0.35 },
   /** Soft piano (felt-muted, used for narrative and the ending) */
-  softPiano: { ...S((sr, m) => piano(sr, m, true), 0.8, 'damp', 0.45), tone: (m, v) => pianoTone(m, v) * 0.8, damper: (m) => pianoDamper(m) * 1.4 },
+  softPiano: { ...S((sr, m) => piano(sr, m, true), 0.8, 'damp', 0.45), tone: (m, v) => pianoTone(m, v) * 0.8, damper: (m) => pianoDamper(m) * 1.4, afterRing: PIANO_AFTER_RING, spread: 0.35 },
   epiano: S((sr, m) => epiano(sr, m), 0.6, 'damp', 0.3),
   /** Reversed piano (Rift, memories): swells in from nothing and is sucked in on the beat */
   revPiano: S((sr, m) => {

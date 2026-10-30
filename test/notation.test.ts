@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { arpeggio, bassline, chords, chordsDuration, mapPitch, melody, pad, repeat, rest, rhythm, roots, scaleVelocity, sequence, slice, stack, stepsPerBar, strum, transpose } from 'polyphon';
+import { arpeggio, bassline, chords, chordsDuration, mapPitch, melody, pad, pedal, repeat, rest, rhythm, roots, scaleVelocity, sequence, slice, stack, stepsPerBar, strum, transpose } from 'polyphon';
 
 const pitches = (p: { notes: { pitches: number[] }[] }) => p.notes.map((n) => n.pitches);
 
@@ -132,4 +132,23 @@ test('transforms return new parts and never modify their input', () => {
     [4, 4],
   ]);
   assert.equal(JSON.stringify(a), before);
+});
+
+test('pedal: notes ring until the next change, or until the same key is struck again', () => {
+  const p = melody('C4:4 E4 G4 C4 | E4:8 G4:8 |');
+  const byBar = pedal(p, 16);
+  assert.deepEqual(
+    byBar.notes.map((n) => [n.time, n.duration]),
+    [
+      [0, 12],
+      [4, 12],
+      [8, 8],
+      [12, 4],
+      [16, 16],
+      [24, 8],
+    ],
+  );
+  const byChord = pedal(p, chords('C | G'));
+  assert.deepEqual(byChord.notes.map((n) => n.duration), byBar.notes.map((n) => n.duration));
+  assert.deepEqual(pedal(p, [4, 16]).notes.map((n) => n.duration), [4, 12, 8, 4, 16, 8]);
 });

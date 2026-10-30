@@ -1,9 +1,12 @@
 // Beethoven, Piano Sonata No. 14 in C-sharp minor, Op. 27 No. 2 ("Moonlight"), first movement, bars 1-9.
 // Adagio sostenuto, alla breve: triplet arpeggios in the middle, octaves in the bass, and from bar 5 the melody with its dotted G#.
 // Notes checked against the Mutopia Project edition (public domain music; the edition is CC BY-SA 2.5).
-// "Senza sordino" (pedal held): a long release lets each harmony blur into the next, as a pedalled piano does.
+// "Senza sordino": the sustain pedal is held throughout, changed with each harmony.
 
-import { defineSong, melody, scaleVelocity } from 'polyphon';
+import { chords, defineSong, melody, pedal, scaleVelocity } from 'polyphon';
+
+/** The harmony, bar by bar: the pedal changes with each chord */
+const harmony = chords('C#m | C#m/B | A D/F# | G#7 C#m/G# G#sus4 G#7 | C#m | G#7/B# | C#m F#m/C# | B7 B7 | E');
 
 /** Triplet eighths: three to a beat, 4/3 of a step each */
 const triplets = melody(`
@@ -41,13 +44,13 @@ const bass = melody(`
 
 export default defineSong({
   title: 'Moonlight Sonata (I. Adagio sostenuto)',
-  description: 'Beethoven, Op. 27 No. 2, bars 1-9: triplet arpeggios, bass octaves and the dotted melody, pianissimo with the pedal held.',
+  description: 'Beethoven, Op. 27 No. 2, bars 1-9: triplet arpeggios, bass octaves and the dotted melody, pianissimo, pedalled with the harmony.',
   bpm: 54,
   loop: false,
   reverb: { size: 2.8, damp: 0.55, preDelay: 0.02, mix: 0.9 },
   tracks: [
-    { name: 'Triplets', instrument: 'piano', part: scaleVelocity(triplets, 0.55), gain: 0.85, reverb: 0.35, humanize: 0.006, params: { release: 1.6 } },
-    { name: 'Melody', instrument: 'piano', part: scaleVelocity(theme, 1.1), pan: 0.08, reverb: 0.35, params: { release: 1.2 } },
-    { name: 'Bass', instrument: 'piano', part: scaleVelocity(bass, 0.75), gain: 0.9, pan: -0.08, reverb: 0.35, params: { release: 2 } },
+    { name: 'Triplets', instrument: 'piano', part: pedal(scaleVelocity(triplets, 0.55), harmony), gain: 0.8, reverb: 0.35, humanize: 0.006 },
+    { name: 'Melody', instrument: 'piano', part: pedal(scaleVelocity(theme, 1.1), harmony), reverb: 0.35 },
+    { name: 'Bass', instrument: 'piano', part: pedal(scaleVelocity(bass, 0.75), harmony), gain: 0.9, reverb: 0.35 },
   ],
 });

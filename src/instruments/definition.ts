@@ -29,6 +29,10 @@ export interface SampledInstrument {
   tone?: (midi: number, velocity: number) => number;
   /** Damping time by pitch (seconds); Infinity means no damper, so the string rings on even after release (the piano's highest strings) */
   damper?: (midi: number) => number;
+  /** After the damper: a faint ring (linear level, and seconds to fade) from the soundboard and the undamped strings */
+  afterRing?: [level: number, seconds: number];
+  /** Stereo width across the keyboard: low notes left, high notes right (0-1), as heard from the player's seat */
+  spread?: number;
   /** Supports glides between notes (the `>` marker in a melody) */
   glide?: boolean;
 }
