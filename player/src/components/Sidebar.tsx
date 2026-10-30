@@ -1,0 +1,62 @@
+// The library column: the app's name and tagline, the MIDI import button, then the playlists (a horizontal strip on phones).
+
+import { useEffect, useRef } from 'react';
+import { plural } from '../format.ts';
+import type { LibraryPlaylist } from '../library.ts';
+import { usePlayerState } from '../usePlayer.ts';
+import { PlaylistCover } from './Cover.tsx';
+import { Logo } from './Icons.tsx';
+import { ImportButton } from './ImportButton.tsx';
+import { Equalizer } from './Indicators.tsx';
+
+interface SidebarProps {
+  playlists: LibraryPlaylist[];
+  selected: LibraryPlaylist;
+  onSelect: (playlist: LibraryPlaylist) => void;
+  onImport: (files: File[]) => void;
+}
+
+export function Sidebar({ playlists, selected, onSelect, onImport }: SidebarProps) {
+  const playingFrom = usePlayerState((s) => (s.status === 'playing' ? s.playlist?.id : null));
+  const list = useRef<HTMLUListElement>(null);
+
+  // Keep the open playlist in view (on phones the strip can start with it off-screen)
+  useEffect(() => {
+    list.current?.querySelector('[aria-current]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [selected.id]);
+
+  return (
+    <nav className="sidebar" aria-label="Playlists">
+      <div className="brand">
+        <Logo />
+        <div>
+          <p className="brand__name">Polyphon</p>
+          <p className="brand__tagline">Music written as code. Every note synthesized in your browser.</p>
+        </div>
+      </div>
+      <h2 className="sidebar__heading">Playlists</h2>
+      <ImportButton onImport={onImport} />
+      <ul ref={list} className="sidebar__list">
+        {playlists.map((playlist) => (
+          <li key={playlist.id}>
+            <button
+              type="button"
+              className="playlist-link"
+              aria-current={playlist === selected ? 'page' : undefined}
+              onClick={() => onSelect(playlist)}
+            >
+              <span className="playlist-link__cover">
+                <PlaylistCover playlist={playlist} />
+              </span>
+              <span className="playlist-link__text">
+                <span className="playlist-link__title">{playlist.title}</span>
+                <span className="playlist-link__meta">{plural(playlist.songs.length, 'song')}</span>
+              </span>
+              {playlist.id === playingFrom && <Equalizer />}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
