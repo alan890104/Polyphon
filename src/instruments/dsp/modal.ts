@@ -18,6 +18,12 @@ export interface ModalOpts {
   trem?: [number, number];
   /** Add a detuned copy of each partial (cents), to produce a bell's beating */
   beat?: number;
+  /**
+   * Mallet contact (Hz): a mallet stays on the bar for a moment (a millisecond or so for yarn and felt, far less for brass), and a force that
+   * lasts τ has little energy above about 1/(2τ). Partials above this frequency are weakened 12 dB per octave, so the same mallet draws a rich
+   * tone from a low bar and an almost pure one from a high bar.
+   */
+  mallet?: number;
   seed?: number;
 }
 
@@ -27,9 +33,10 @@ export function modal(sr: number, f: number, parts: ModalPartial[], o: ModalOpts
   const nyq = sr * 0.45;
   const att = Math.max(1, Math.floor((o.attack ?? 0.001) * sr));
   const r = rng(o.seed ?? Math.round(f * 13));
-  for (const [ratio, amp, t60] of parts) {
+  for (const [ratio, a, t60] of parts) {
     const pf = f * ratio;
     if (pf >= nyq) continue;
+    const amp = o.mallet ? a / (1 + (pf / o.mallet) ** 2) : a;
     const copies = o.beat ? [1, Math.pow(2, o.beat / 1200)] : [1];
     for (const cm of copies) {
       const w0 = (2 * Math.PI * pf * cm) / sr;

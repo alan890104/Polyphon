@@ -196,9 +196,9 @@ The Jukebox creates its `AudioContext` on first use and starts it on the first c
 How they are made:
 
 - **Piano**: modal synthesis of every string (one to three per note, slightly detuned), with inharmonicity, stretched tuning, two-stage decay and frequency-dependent string loss; a hammer whose felt rounds off the treble; sympathetic resonance from the other strings; a soundboard, damper noise and a faint ring after release; velocity-dependent brightness; and the keyboard spread across the stereo field.
-- **Plucked strings**: Karplus-Strong with an allpass for exact tuning and a comb filter for the pluck position; bass plucks are additive.
+- **Plucked strings**: Karplus-Strong excited by a physically shaped pluck (the n-th harmonic ∝ sin(nπ·position)/n), with frequency-dependent string loss, an allpass for exact tuning and the resonances of the instrument's body (guitar, lute, harp, dulcimer, violin); bass plucks are additive.
 - **Bowed strings**: every player in a section is rendered separately, with their own intonation, vibrato, bowing point and bow noise, through a body with dozens of resonances. The sustain loops seamlessly.
-- **Mallets and bells**: modal synthesis with measured partial ratios (church bells have hum, prime, tierce, quint and nominal).
+- **Mallets and bells**: modal synthesis with the partial ratios of the real bars, tines and tubes (church bells have hum, prime, tierce, quint and nominal; a tubular bell's pitch is heard from partials near 2 : 3 : 4), and the mallet's contact time rounding off the overtones of the high notes.
 - **Winds, brass and voices**: live oscillators with harmonic tables, breath noise, formant filters (choirs sing vowels) and per-note vibrato.
 - **Drums**: drumheads as circular-membrane modes that glide as the head settles, with the stick or beater's click; timpani tuned by the air in the kettle (modes near 1 : 1.5 : 2 : 2.5 : 3); cymbal washes that bloom upward after the strike and lose their highs first; velocity-dependent brightness; and random variants, so repeated hits never sound identical.
 - **Rooms**: a procedural convolution reverb per song.

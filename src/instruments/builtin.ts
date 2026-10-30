@@ -7,7 +7,7 @@ import { AMB } from './dsp/ambience.ts';
 import { DRUMS } from './dsp/drums.ts';
 import { modal, type ModalPartial } from './dsp/modal.ts';
 import { epiano, piano } from './dsp/piano.ts';
-import { ks, pluckAdd } from './dsp/pluck.ts';
+import { DULCIMER_BODY, GUITAR_BODY, HARP_BODY, ks, LUTE_BODY, pluckAdd, STEEL_BODY, VIOLIN_BODY } from './dsp/pluck.ts';
 import { brassStab, spicc } from './dsp/staccato.ts';
 import { BOWS, bowSample } from './bowed.ts';
 import { VOICES } from './voices.ts';
@@ -39,27 +39,35 @@ const stroke = (top: number | ((m: number) => number), floor: number) => (m: num
 
 const SAMPLED = {
   // ── Plucked strings
-  harp: S((sr, m) => ks(sr, f0(m), { len: Math.min(6, 5 * hiShort(m, 48, 30) + 0.6), t60: 6 * hiShort(m, 48, 28), bright: 0.35, pos: 0.28, s: 0.5 }), 0.7),
-  nylon: S((sr, m) => ks(sr, f0(m), { len: 3.2, t60: 3.4 * hiShort(m, 52, 30), bright: 0.5, pos: 0.18, s: 0.5 }), 0.7, 'damp', 0.35),
+  harp: S((sr, m) => ks(sr, f0(m), { len: Math.min(6, 5 * hiShort(m, 48, 30) + 0.6), t60: 6 * hiShort(m, 48, 28), bright: 0.35, pos: 0.28, loss: 4e-8, body: HARP_BODY, tilt: -2.2 }), 0.56),
+  nylon: S((sr, m) => ks(sr, f0(m), { len: 3.2, t60: 3.4 * hiShort(m, 52, 30), bright: 0.5, pos: 0.18, loss: 6e-8, body: GUITAR_BODY, tilt: -2.3 }), 0.49, 'damp', 0.35),
   /** Lute / oud: sharp, bright, short, double-strung */
-  lute: S((sr, m) => ks(sr, f0(m), { len: 2.4, t60: 2.2 * hiShort(m, 52, 30), bright: 0.8, pos: 0.1, s: 0.42, detune: 4 }), 0.65, 'damp', 0.25),
-  steel: S((sr, m) => ks(sr, f0(m), { len: 4, t60: 4.5 * hiShort(m, 52, 30), bright: 0.85, pos: 0.13, s: 0.35 }), 0.55, 'damp', 0.4),
+  lute: S((sr, m) => ks(sr, f0(m), { len: 2.4, t60: 2.2 * hiShort(m, 52, 30), bright: 0.8, pos: 0.1, loss: 4e-8, detune: 4, body: LUTE_BODY, tilt: -3.2 }), 0.375, 'damp', 0.25),
+  steel: S((sr, m) => ks(sr, f0(m), { len: 4, t60: 4.5 * hiShort(m, 52, 30), bright: 0.85, pos: 0.13, loss: 2e-8, body: STEEL_BODY, tilt: -2.75 }), 0.375, 'damp', 0.4),
   /** Hammered dulcimer: double-strung, bright, long */
-  dulcimer: S((sr, m) => ks(sr, f0(m), { len: 4, t60: 3.5 * hiShort(m, 60, 30), bright: 0.9, pos: 0.12, s: 0.4, detune: 6 }), 0.55),
-  pizz: S((sr, m) => ks(sr, f0(m), { len: 0.9, t60: 0.55 * hiShort(m, 48, 36), bright: 0.3, pos: 0.3, s: 0.5 }), 0.8),
+  dulcimer: S((sr, m) => ks(sr, f0(m), { len: 4, t60: 3.5 * hiShort(m, 60, 30), bright: 0.9, pos: 0.12, loss: 2e-8, detune: 6, body: DULCIMER_BODY, tilt: -3 }), 0.34),
+  pizz: S((sr, m) => ks(sr, f0(m), { len: 0.9, t60: 0.55 * hiShort(m, 48, 36), bright: 0.3, pos: 0.3, loss: 8e-8, body: VIOLIN_BODY, tilt: -1.1 }), 0.33),
   /** Plucked bass (double bass pizzicato) */
   pizzBass: { ...S((sr, m) => pluckAdd(sr, f0(m), { len: 2.2, t60: 1.6 * hiShort(m, 36, 24), pos: 0.22, tilt: 0.85, body: [98, 196], thump: 0.35 }), 1.1, 'damp', 0.35), minHold: 0.32 },
   // ── Struck melodic instruments
-  kalimba: S(modalInst([[1, 1, 1.6], [5.95, 0.22, 0.14], [2.0, 0.05, 0.5]], 2.2, { click: { amp: 0.15, t: 0.006, hz: 3000 } }), 0.55),
-  marimba: S(modalInst([[1, 1, 1.1], [3.93, 0.22, 0.22], [9.2, 0.05, 0.05]], 1.6, { attack: 0.0015, click: { amp: 0.35, t: 0.018, hz: 2.6, q: 0.7 } }), 0.65),
+  /** Kalimba: a steel tine clamped at one end, so its second mode sits near 6× (not a harmonic), plucked by the thumb */
+  kalimba: S(modalInst([[1, 1, 1.6], [5.95, 0.3, 0.4], [2.0, 0.05, 0.5]], 2.2, { mallet: 3500, click: { amp: 0.15, t: 0.006, hz: 3000 } }), 0.55),
+  /** Marimba: rosewood bars undercut to 1 : 4 : ~9-10, a tube under each reinforcing the fundamental; the overtones of a wooden bar die a few times faster */
+  marimba: S(modalInst([[1, 1, 1.1], [3.93, 0.4, 0.4], [9.2, 0.2, 0.1]], 1.6, { attack: 0.0015, mallet: 2000, click: { amp: 0.35, t: 0.018, hz: 2.6, q: 0.7 } }), 0.65),
   vibes: S(modalInst([[1, 1, 3.5], [4.0, 0.2, 0.8], [10, 0.04, 0.15]], 4, { trem: [5.5, 0.35], attack: 0.002 }), 0.5, 'damp', 0.6),
-  glock: S(modalInst([[1, 1, 2.4], [2.76, 0.35, 0.9], [5.4, 0.15, 0.4]], 3, { click: { amp: 0.1, t: 0.004, hz: 7000 } }), 0.35),
-  celesta: S(modalInst([[1, 1, 1.4], [2, 0.18, 0.6], [4, 0.1, 0.25], [10.3, 0.03, 0.08]], 2, { click: { amp: 0.06, t: 0.005, hz: 5000 } }), 0.45),
-  musicbox: S(modalInst([[1, 1, 1.5], [3.0, 0.18, 0.5], [5.95, 0.12, 0.3], [9.1, 0.05, 0.12]], 2.2, { click: { amp: 0.12, t: 0.003, hz: 6000 }, beat: 2 }), 0.4),
+  /** Glockenspiel: free steel bars (1 : 2.76 : 5.4), struck with hard mallets; steel barely damps them, so they ring long */
+  glock: S(modalInst([[1, 1, 3.4], [2.76, 0.35, 1.3], [5.4, 0.15, 0.55]], 4, { click: { amp: 0.1, t: 0.004, hz: 7000 } }), 0.3),
+  /** Celesta: steel bars like a glockenspiel's (1 : 2.76 : 5.4) over wooden resonator boxes, struck by felt hammers */
+  celesta: S(modalInst([[1, 1, 1.4], [2.76, 0.3, 0.6], [5.4, 0.12, 0.25]], 2, { mallet: 1800, click: { amp: 0.06, t: 0.005, hz: 5000 } }), 0.5),
+  /** Music box: comb teeth are cantilevers (clamped at one end: 1 : 6.27 : 17.6), plucked by steel pins */
+  musicbox: S(modalInst([[1, 1, 1.5], [6.27, 0.3, 0.35], [17.55, 0.1, 0.1]], 2.2, { click: { amp: 0.12, t: 0.003, hz: 6000 }, beat: 2 }), 0.49),
   /** Church bell: hum, prime, minor-third tierce, fifth, nominal (the pitch you hear) */
   bell: S((sr, m) => modal(sr, f0(m) / 2, [[0.5, 0.55, 9], [1, 0.7, 6], [1.183, 0.5, 4.5], [1.506, 0.28, 3.5], [2, 1, 4], [2.514, 0.3, 2.2], [2.662, 0.25, 2], [3.011, 0.2, 1.6], [4.166, 0.1, 1]], { len: 7, beat: 2.5, click: { amp: 0.2, t: 0.01, hz: 4000, q: 0.7 } }), 0.4),
-  /** Tubular bell: brighter, shorter */
-  chime: S((sr, m) => modal(sr, f0(m), [[1, 1, 3.5], [2.76, 0.5, 2], [5.4, 0.3, 1.2], [8.93, 0.12, 0.6]], { len: 4, click: { amp: 0.25, t: 0.006, hz: 5000 } }), 0.35),
+  /**
+   * Tubular bell: a free tube's modes go as (2n+1)², 9 : 25 : 49 : 81 : 121 : 169 : 225; modes 4, 5 and 6 fall near 2 : 3 : 4, and the ear hears the
+   * strike note an octave below mode 4, where no partial is. Modes 1 and 2 are too low to radiate much, mode 3 adds the clang
+   */
+  chime: S((sr, m) => modal(sr, f0(m), [[0.617, 0.08, 4.5], [1.21, 0.3, 4], [2, 1, 3.5], [2.98, 0.8, 2.8], [4.12, 0.5, 2], [5.47, 0.28, 1.4], [7.0, 0.14, 0.9]], { len: 4, click: { amp: 0.25, t: 0.006, hz: 5000 } }), 0.4),
   steelpan: S(modalInst([[1, 1, 1.4], [2, 0.55, 0.9], [3, 0.22, 0.5], [4.02, 0.1, 0.3]], 1.8, { bend: 1.02, bendT: 0.02, click: { amp: 0.1, t: 0.008, hz: 2500 } }), 0.5),
   piano: { ...S((sr, m) => piano(sr, m), 0.75, 'damp', 0.3), tone: (m, v) => pianoTone(m, v), damper: pianoDamper, afterRing: PIANO_AFTER_RING, spread: 0.35 },
   /** Soft piano (felt-muted, used for narrative and the ending) */
@@ -89,6 +97,7 @@ const SAMPLED = {
   frame: D('frame', 0.7, undefined, 3, stroke(8000, 0.08)),
   darbuka: D('darbuka', 0.6, undefined, 3, stroke(8000, 0.08)),
   tom: D('tom', 0.7, undefined, 3, stroke(8000, 0.08)),
+  /** Felt mallets: the roll-off follows the drum's pitch; four variants so a roll does not repeat */
   timpani: D('timpani', 0.8, undefined, 4, stroke((m) => 8 * f0(m || 38), 0.15)),
   woodblock: D('woodblock', 0.4),
   clave: D('clave', 0.3, 75),
