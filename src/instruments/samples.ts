@@ -71,6 +71,8 @@ export function getSample(ctx: BaseAudioContext, def: SampledInstrument, name: s
     const sr = def.bow ? Math.round(ctx.sampleRate * def.bow.rate) : ctx.sampleRate;
     const data = def.render(sr, mm, v);
     const chans = data instanceof Float32Array ? [data] : Array.isArray(data) ? data : [data.data];
+    // One NaN would circulate through the reverb and delay feedback and silence the whole mix for good
+    for (const d of chans) for (let i = 0; i < d.length; i++) if (!Number.isFinite(d[i])) d[i] = 0;
     b = ctx.createBuffer(chans.length, chans[0].length, sr);
     chans.forEach((d, i) => b!.getChannelData(i).set(d));
     if (!(data instanceof Float32Array) && !Array.isArray(data)) loops.set(b, [data.loop[0] / sr, data.loop[1] / sr]);

@@ -161,7 +161,7 @@ export class Playback {
     g.cancelScheduledValues(now);
     g.setValueAtTime(g.value, now);
     g.linearRampToValueAtTime(0, now + fade);
-    setTimeout(() => this.output.disconnect(), (fade + 0.3) * 1000);
+    onClock(this.context, now + fade + 0.3, () => this.output.disconnect());
   }
 
   /** Context time of a step in the current section, with swing applied to on-grid steps */
@@ -230,10 +230,27 @@ export class Playback {
   /** A song with an end has played its last section: release after the reverb tail */
   private end(at: number): void {
     this.state = 'ended';
-    const wait = Math.max(0, at - this.context.currentTime);
-    setTimeout(() => this.resolveFinished(), wait * 1000);
-    setTimeout(() => this.output.disconnect(), (wait + (this.song.reverb ?? DEFAULT_REVERB).size + 1.5) * 1000);
+    onClock(this.context, at, () => this.resolveFinished());
+    onClock(this.context, at + (this.song.reverb ?? DEFAULT_REVERB).size + 1.5, () => this.output.disconnect());
   }
+}
+
+/**
+ * Run `fn` when the context's own clock reaches `time`. A wall-clock timer would drift from the audio: an offline render runs
+ * faster or slower than real time, and a suspended context does not advance at all.
+ */
+function onClock(ctx: BaseAudioContext, time: number, fn: () => void): void {
+  const tick = ctx.createConstantSource();
+  const silent = ctx.createGain();
+  silent.gain.value = 0;
+  tick.connect(silent).connect(ctx.destination);
+  tick.onended = () => {
+    tick.disconnect();
+    silent.disconnect();
+    fn();
+  };
+  tick.start(ctx.currentTime);
+  tick.stop(Math.max(ctx.currentTime, time));
 }
 
 /** Instruments whose notes can be picked up mid-way when seeking (pads, bowed strings, ambience), as opposed to struck ones */
