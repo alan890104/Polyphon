@@ -1,10 +1,10 @@
-// The Now playing panel: a large cover with a live spectrum, the song's details, a WAV download and the mixer.
+// The Now playing panel: the song's disc turning under the comb, the song's details, a WAV download and the mixer.
 // A column on wide screens, a drawer on tablets, and a full-screen sheet on phones (where it also carries the seek bar and transport).
 
-import { artFor } from '../art.ts';
+import { songDisc } from '../disc.ts';
 import { formatMeter, formatTime } from '../format.ts';
 import { usePlayer, usePlayerState } from '../usePlayer.ts';
-import { Cover } from './Cover.tsx';
+import { DiscPlayer } from './DiscPlayer.tsx';
 import { DownloadButton } from './DownloadButton.tsx';
 import { IconButton } from './IconButton.tsx';
 import { CloseIcon } from './Icons.tsx';
@@ -12,7 +12,6 @@ import { Spinner } from './Indicators.tsx';
 import { Mixer } from './Mixer.tsx';
 import { ProgressBar } from './ProgressBar.tsx';
 import { Transport } from './Transport.tsx';
-import { Visualizer } from './Visualizer.tsx';
 
 export function NowPlayingPanel({ onClose }: { onClose: () => void }) {
   const { analyser } = usePlayer();
@@ -23,17 +22,16 @@ export function NowPlayingPanel({ onClose }: { onClose: () => void }) {
   const { title, description, bpm, meter } = song.song;
 
   return (
-    <aside className="panel" aria-label="Now playing" style={{ '--hue': artFor(song.id).hue }}>
+    <aside className="panel" aria-label="Now playing">
       <header className="panel__header">
-        <h2 className="panel__heading">Now playing</h2>
+        <h2 className="label">Now playing</h2>
         <IconButton label="Close Now playing" onClick={onClose}>
           <CloseIcon />
         </IconButton>
       </header>
 
-      <div className="panel__art">
-        <Cover id={song.id} />
-        {analyser && <Visualizer analyser={analyser} />}
+      <div className="panel__disc">
+        <DiscPlayer disc={songDisc(song.song)} duration={song.duration} analyser={analyser} />
         {loading && (
           <p className="panel__loading">
             <Spinner />
@@ -55,15 +53,15 @@ export function NowPlayingPanel({ onClose }: { onClose: () => void }) {
       {description && <p className="panel__description">{description}</p>}
       <dl className="facts">
         <div>
-          <dt>Tempo</dt>
+          <dt className="label">Tempo</dt>
           <dd>{bpm} BPM</dd>
         </div>
         <div>
-          <dt>Meter</dt>
+          <dt className="label">Meter</dt>
           <dd>{formatMeter(meter)}</dd>
         </div>
         <div>
-          <dt>Length</dt>
+          <dt className="label">Length</dt>
           <dd>{formatTime(song.duration)}</dd>
         </div>
       </dl>

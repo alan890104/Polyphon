@@ -1,13 +1,12 @@
-// The main panel: a playlist's header (cover, title, description, song count and length), its play and shuffle buttons, and its songs.
-// The page behind the header takes its color from the cover.
+// The main column: a playlist's title page (title, description, song count and length, its disc) with its play and shuffle
+// buttons, then its songs.
 
-import { artFor, coverIds } from '../art.ts';
 import { formatLength, plural, textWidth } from '../format.ts';
 import { playable, type LibraryPlaylist } from '../library.ts';
 import { usePlayer, usePlayerState } from '../usePlayer.ts';
 import { PlaylistCover } from './Cover.tsx';
 import { IconButton } from './IconButton.tsx';
-import { ClockIcon, PauseIcon, PlayIcon, ShuffleIcon } from './Icons.tsx';
+import { PauseIcon, PlayIcon, ShuffleIcon } from './Icons.tsx';
 import { TrackRow } from './TrackRow.tsx';
 
 export function PlaylistView({ playlist }: { playlist: LibraryPlaylist }) {
@@ -18,45 +17,42 @@ export function PlaylistView({ playlist }: { playlist: LibraryPlaylist }) {
   const { title, description, songs, duration } = playlist;
 
   return (
-    <main className="main" style={{ '--hue': artFor(coverIds(playlist)[0]).hue }}>
+    <main className="main">
       <header className="hero">
-        <div className="hero__cover">
-          <PlaylistCover playlist={playlist} />
-        </div>
         <div className="hero__text">
-          <p className="hero__kind">Playlist</p>
+          <p className="label">Playlist</p>
           <h1 className="hero__title" style={{ '--title-width': textWidth(title) }}>
             {title}
           </h1>
           <p className="hero__description">{description}</p>
-          <p className="hero__meta">
-            <strong>{plural(songs.length, 'song')}</strong>, {formatLength(duration)}
+          <p className="hero__meta label">
+            {plural(songs.length, 'song')} · {formatLength(duration)}
           </p>
+          <div className="actions">
+            <IconButton
+              className="play-button play-button--large"
+              label={playing ? 'Pause' : `Play ${title}`}
+              disabled={!playable(playlist).length}
+              onClick={() => (current ? player.toggle() : player.playAll(playlist))}
+            >
+              {playing ? <PauseIcon /> : <PlayIcon />}
+            </IconButton>
+            <IconButton className="toggle-button" label="Shuffle" pressed={shuffle} onClick={() => player.setShuffle(!shuffle)}>
+              <ShuffleIcon />
+            </IconButton>
+          </div>
+        </div>
+        <div className="hero__disc">
+          <PlaylistCover playlist={playlist} size="large" />
         </div>
       </header>
 
-      <div className="actions">
-        <IconButton
-          className="play-button play-button--large"
-          label={playing ? 'Pause' : `Play ${title}`}
-          disabled={!playable(playlist).length}
-          onClick={() => (current ? player.toggle() : player.playAll(playlist))}
-        >
-          {playing ? <PauseIcon /> : <PlayIcon />}
-        </IconButton>
-        <IconButton className="toggle-button toggle-button--large" label="Shuffle" pressed={shuffle} onClick={() => player.setShuffle(!shuffle)}>
-          <ShuffleIcon />
-        </IconButton>
-      </div>
-
       <div className="tracks">
-        <div className="tracks__head" aria-hidden="true">
-          <span className="track__index">#</span>
-          <span>Title</span>
+        <div className="tracks__head label" aria-hidden="true">
+          <span className="track__index">No.</span>
+          <span className="tracks__title">Title</span>
           <span className="track__tempo">Tempo</span>
-          <span className="track__length">
-            <ClockIcon />
-          </span>
+          <span className="track__length">Length</span>
         </div>
         {songs.length ? (
           <ol aria-label={`Songs in ${title}`}>

@@ -9,7 +9,7 @@ export function ImportButton({ onImport }: { onImport: (files: File[]) => void }
     <>
       <button type="button" className="import-button" title="Import MIDI files, or drop them anywhere" onClick={() => input.current?.click()}>
         <PlusIcon />
-        <span className="import-button__label">Import MIDI</span>
+        Import MIDI
       </button>
       <input
         ref={input}

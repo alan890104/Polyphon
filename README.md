@@ -32,7 +32,7 @@ Polyphon grew out of the soundtrack of [Eldor](https://github.com/alan890104/eld
 - **An orchestra with no samples.** Pianos and plucked strings are modelled physically, bowed strings are rendered player by player, and winds, brass, choirs and synths are synthesized live. Each sampled note is computed once and cached, so playback costs almost nothing.
 - **A jukebox for games.** Crossfades between songs, preloading, pause, resume and seek, ducking under sound effects, intros that lead into loops, and the browser's audio unlock handled for you.
 - **Import and export.** Load Standard MIDI Files with `songFromMidi`; render any song to a WAV with `renderSong` and `encodeWav`.
-- **A listening room.** `npm run dev` opens a Spotify-style player with every example, a per-track mixer and a visualizer.
+- **A listening room.** `npm run dev` opens a player with every example and a per-track mixer; each song is drawn from its own notes as a perforated disc, like a polyphon's, that turns as it plays.
 
 ## Install
 
@@ -243,7 +243,7 @@ npm install
 npm run dev
 ```
 
-The player lists every example song (the Eldor soundtrack, Beethoven's Moonlight Sonata and a few short demos), with a mixer to mute or solo tracks, a visualizer, WAV download and MIDI import. MIDI files you import stay in your browser.
+The player lists every example song (the Eldor soundtrack, Beethoven's Moonlight Sonata and a few short demos), with a mixer to mute or solo tracks, WAV download and MIDI import. Every song's cover is its score: the notes punched into a disc, angle for time and radius for pitch, the tune in brass. While a song plays its disc turns under the comb and the perforations light up as they pass. MIDI files you import stay in your browser.
 
 ## Development
 

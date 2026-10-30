@@ -1,7 +1,7 @@
 // The library the player shows: every playlist in examples/, with each song loaded up front for its title, tempo, length and tracks,
 // and MIDI files the listener imports (converted in the browser and kept in memory).
 
-import { songDuration, songFromMidi, type Song } from 'polyphon';
+import { songDuration, songFromMidi, type Song, type Track } from 'polyphon';
 import { playlists, type Playlist } from '../../examples/index.ts';
 import { errorMessage } from './format.ts';
 
@@ -91,11 +91,16 @@ function totalDuration(songs: LibrarySong[]): number {
   return songs.reduce((sum, s) => sum + (s.status === 'ready' ? s.duration : 0), 0);
 }
 
-/** Group a song's tracks by the name a playback gives them (the instrument's when the track has none) */
+/** The name a playback gives a track (the instrument's when the track has none) */
+export function trackName(track: Track): string {
+  return track.name ?? track.instrument;
+}
+
+/** Group a song's tracks by name */
 function trackGroups(song: Song): TrackGroup[] {
   const groups = new Map<string, Set<string>>();
   for (const track of [...(song.intro ?? []), ...song.tracks]) {
-    const name = track.name ?? track.instrument;
+    const name = trackName(track);
     groups.set(name, (groups.get(name) ?? new Set()).add(track.instrument));
   }
   return [...groups].map(([name, instruments]) => ({ name, instruments: [...instruments] }));

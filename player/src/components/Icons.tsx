@@ -1,25 +1,16 @@
-// Icons: small inline SVGs on a 24-unit grid, drawn in the current text color.
+// Icons: one set on a 20-unit grid, drawn with 1.5-unit strokes and round ends in the current text color.
+// The play and pause glyphs are solid, to sit inside the round play button.
 
 import type { ReactNode } from 'react';
 
-/** Solid shapes */
-function Solid({ children }: { children: ReactNode }) {
-  return (
-    <svg className="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
-      {children}
-    </svg>
-  );
-}
-
-/** Rounded 2-unit strokes */
 function Line({ children }: { children: ReactNode }) {
   return (
     <svg
       className="icon"
-      viewBox="0 0 24 24"
+      viewBox="0 0 20 20"
       fill="none"
       stroke="currentColor"
-      strokeWidth={2}
+      strokeWidth={1.5}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -30,138 +21,142 @@ function Line({ children }: { children: ReactNode }) {
   );
 }
 
+function Solid({ children }: { children: ReactNode }) {
+  return (
+    <svg className="icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" focusable="false">
+      {children}
+    </svg>
+  );
+}
+
 export const PlayIcon = () => (
   <Solid>
-    <path d="M7.5 5.2v13.6a1.1 1.1 0 0 0 1.67.94l11.1-6.8a1.1 1.1 0 0 0 0-1.88l-11.1-6.8A1.1 1.1 0 0 0 7.5 5.2z" />
+    <path d="M6.5 4.6v10.8a.8.8 0 0 0 1.22.68l8.64-5.4a.8.8 0 0 0 0-1.36L7.72 3.92a.8.8 0 0 0-1.22.68z" />
   </Solid>
 );
 
 export const PauseIcon = () => (
   <Solid>
-    <rect x="6" y="4.5" width="4.2" height="15" rx="1.3" />
-    <rect x="13.8" y="4.5" width="4.2" height="15" rx="1.3" />
-  </Solid>
-);
-
-export const NextIcon = () => (
-  <Solid>
-    <path d="M5 6v12a1 1 0 0 0 1.55.83l8.9-6a1 1 0 0 0 0-1.66l-8.9-6A1 1 0 0 0 5 6z" />
-    <rect x="16.6" y="5" width="2.6" height="14" rx="1.3" />
+    <rect x="5.5" y="4.5" width="3" height="11" rx="0.75" />
+    <rect x="11.5" y="4.5" width="3" height="11" rx="0.75" />
   </Solid>
 );
 
 export const PreviousIcon = () => (
-  <Solid>
-    <path d="M19 6v12a1 1 0 0 1-1.55.83l-8.9-6a1 1 0 0 1 0-1.66l8.9-6A1 1 0 0 1 19 6z" />
-    <rect x="4.8" y="5" width="2.6" height="14" rx="1.3" />
-  </Solid>
+  <Line>
+    <path d="M14.5 5.5v9L8 10z" />
+    <path d="M5.5 5v10" />
+  </Line>
+);
+
+export const NextIcon = () => (
+  <Line>
+    <path d="M5.5 5.5v9L12 10z" />
+    <path d="M14.5 5v10" />
+  </Line>
 );
 
 export const ShuffleIcon = () => (
   <Line>
-    <path d="M16 4h4v4" />
-    <path d="M4 19 20 4" />
-    <path d="M20 16v4h-4" />
-    <path d="m14.5 14.5 5.5 5.5" />
-    <path d="M4 5l5 5" />
+    <path d="M3 6.5h2c2 0 3 1 5 3.5s3 3.5 5 3.5h2" />
+    <path d="M3 13.5h2c2 0 3-1 5-3.5s3-3.5 5-3.5h2" />
+    <path d="m15 4.5 2 2-2 2M15 11.5l2 2-2 2" />
   </Line>
+);
+
+const RepeatLoop = () => (
+  <>
+    <path d="M4 9.5v-1A2.5 2.5 0 0 1 6.5 6H16" />
+    <path d="m14 4 2 2-2 2" />
+    <path d="M16 10.5v1a2.5 2.5 0 0 1-2.5 2.5H4" />
+    <path d="m6 12-2 2 2 2" />
+  </>
 );
 
 export const RepeatIcon = () => (
   <Line>
-    <path d="m17 2 3 3-3 3" />
-    <path d="M4 11v-1a5 5 0 0 1 5-5h11" />
-    <path d="m7 22-3-3 3-3" />
-    <path d="M20 13v1a5 5 0 0 1-5 5H4" />
+    <RepeatLoop />
   </Line>
 );
 
 export const RepeatOneIcon = () => (
   <Line>
-    <path d="m17 2 3 3-3 3" />
-    <path d="M4 11v-1a5 5 0 0 1 5-5h11" />
-    <path d="m7 22-3-3 3-3" />
-    <path d="M20 13v1a5 5 0 0 1-5 5H4" />
-    <path d="M11 10.5 12.5 9.5v5" />
+    <RepeatLoop />
+    <path d="m9.25 9 1-.75v3.5" />
   </Line>
 );
 
-const Speaker = () => <path d="M11 5.5 6.5 9H3.5v6h3l4.5 3.5z" fill="currentColor" />;
-
 export const VolumeIcon = ({ level }: { level: number }) => (
   <Line>
-    <Speaker />
+    <path d="M3.5 7.75h2.25L9 5v10l-3.25-2.75H3.5z" />
     {level === 0 ? (
-      <path d="m16 9.5 5 5m0-5-5 5" />
+      <path d="m13 8 4 4m0-4-4 4" />
     ) : (
       <>
-        <path d="M15.5 9a4 4 0 0 1 0 6" />
-        {level >= 0.5 && <path d="M18.5 6a8 8 0 0 1 0 12" />}
+        <path d="M12.5 7.75a3.2 3.2 0 0 1 0 4.5" />
+        {level >= 0.5 && <path d="M14.75 5.5a6.4 6.4 0 0 1 0 9" />}
       </>
     )}
   </Line>
 );
 
-export const PanelIcon = () => (
+/** The Now playing panel: a disc under its comb */
+export const DiscIcon = () => (
   <Line>
-    <rect x="3" y="4" width="18" height="16" rx="3" />
-    <path d="M14.5 4v16" />
-    <path d="M7 9h4M7 13h3" />
+    <circle cx="10" cy="11" r="6.5" />
+    <circle cx="10" cy="11" r="1.25" />
+    <path d="M10 2.5v4" />
   </Line>
 );
 
 export const CloseIcon = () => (
   <Line>
-    <path d="M6 6l12 12M18 6 6 18" />
+    <path d="m5.5 5.5 9 9m0-9-9 9" />
   </Line>
 );
 
 export const DownloadIcon = () => (
   <Line>
-    <path d="M12 4v11" />
-    <path d="m7 10 5 5 5-5" />
-    <path d="M5 20h14" />
+    <path d="M10 3.5V12" />
+    <path d="M6.5 8.5 10 12l3.5-3.5" />
+    <path d="M4.5 16h11" />
   </Line>
 );
 
 export const PlusIcon = () => (
   <Line>
-    <path d="M12 5v14M5 12h14" />
-  </Line>
-);
-
-/** A file going into a tray: the drop target */
-export const ImportIcon = () => (
-  <Line>
-    <path d="M12 3v11" />
-    <path d="m7.5 9.5 4.5 4.5 4.5-4.5" />
-    <path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" />
-  </Line>
-);
-
-export const ClockIcon = () => (
-  <Line>
-    <circle cx="12" cy="12" r="8.5" />
-    <path d="M12 7.5V12l3 2" />
+    <path d="M10 4.5v11M4.5 10h11" />
   </Line>
 );
 
 export const WarningIcon = () => (
   <Line>
-    <path d="M10.3 4.2 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0z" />
-    <path d="M12 10v3.5M12 17h.01" />
+    <path d="M10 3.5 17 16H3z" />
+    <path d="M10 8.25v3.5M10 13.75v.25" />
   </Line>
 );
 
-/** The Polyphon mark: a few voices of different heights */
+/** The Polyphon mark: a perforated disc, its tune punched in two tracks around the hub and the spindle hole */
 export const Logo = () => (
-  <svg className="logo" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-    <rect width="32" height="32" rx="8" fill="var(--accent)" />
-    <g fill="var(--accent-ink)">
-      <rect x="7" y="12" width="3.2" height="8" rx="1.6" />
-      <rect x="12.2" y="7" width="3.2" height="18" rx="1.6" />
-      <rect x="17.4" y="10" width="3.2" height="12" rx="1.6" />
-      <rect x="22.6" y="13.5" width="3.2" height="5" rx="1.6" />
+  <svg className="logo" viewBox="0 0 40 40" fill="none" stroke="currentColor" aria-hidden="true" focusable="false">
+    <circle cx="20" cy="20" r="18.75" strokeWidth="1.5" />
+    <circle cx="20" cy="20" r="6.25" strokeWidth="1.5" />
+    <circle cx="20" cy="20" r="1.9" strokeWidth="1.5" />
+    <g fill="currentColor" stroke="none">
+      <circle cx="25.94" cy="6.66" r="1.2" />
+      <circle cx="30.14" cy="9.5" r="1.2" />
+      <circle cx="29.38" cy="31.18" r="1.2" />
+      <circle cx="5.54" cy="17.97" r="1.2" />
+      <circle cx="7.36" cy="12.7" r="1.2" />
+      <circle cx="30.37" cy="22.2" r="1.2" />
+      <circle cx="28.79" cy="25.93" r="1.2" />
+      <circle cx="9.71" cy="22.56" r="1.2" />
+      <circle cx="14.07" cy="11.21" r="1.2" />
     </g>
+    <path
+      d="M33.34 14.06A14.6 14.6 0 0 1 34.56 21.02M24.51 33.89A14.6 14.6 0 0 1 20.51 34.59M11.42 31.81A14.6 14.6 0 0 1 6.11 24.51M21.84 9.56A10.6 10.6 0 0 1 26.53 11.65M18.16 30.44A10.6 10.6 0 0 1 14.07 28.79"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+    />
   </svg>
 );

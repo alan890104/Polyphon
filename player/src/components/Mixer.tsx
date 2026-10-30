@@ -3,6 +3,7 @@
 
 import type { Playback } from 'polyphon';
 import { useEffect, useMemo, useRef } from 'react';
+import { twoDigits } from '../format.ts';
 import type { ReadySong } from '../library.ts';
 import { soloist } from '../player.ts';
 import { useAnimationFrame } from '../useAnimationFrame.ts';
@@ -24,10 +25,11 @@ export function Mixer({ song }: { song: ReadySong }) {
 
   return (
     <section className="mixer">
-      <h3 className="panel__heading">Mixer</h3>
-      <ul className="mixer__rows">
-        {song.tracks.map(({ name, instruments }) => (
+      <h3 className="label">Mixer</h3>
+      <ul>
+        {song.tracks.map(({ name, instruments }, i) => (
           <li key={name} className="mixer__row" data-muted={muted.has(name) ? '' : undefined}>
+            <span className="mixer__channel">{twoDigits(i + 1)}</span>
             <span className="mixer__label">
               <span className="mixer__name">{name}</span>
               <span className="mixer__instrument">{instruments.join(', ')}</span>

@@ -56,7 +56,7 @@ export class Player {
     return this.current;
   }
 
-  /** The analyser at the end of the audio chain, for visuals (null until the first song plays) */
+  /** The analyser at the end of the audio chain, for the music's level (null until the first song plays) */
   get analyser(): AnalyserNode | null {
     return this.audio?.analyser ?? null;
   }
@@ -225,10 +225,6 @@ export class Player {
     if (this.audio) return this.audio;
     const context = new AudioContext();
     const analyser = context.createAnalyser();
-    analyser.fftSize = 4096;
-    analyser.minDecibels = -90;
-    analyser.maxDecibels = -25;
-    analyser.smoothingTimeConstant = 0.8;
     analyser.connect(context.destination);
     this.audio = { jukebox: new Jukebox({ context, destination: analyser, volume: this.current.volume }), analyser };
     const poll = () => {

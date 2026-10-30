@@ -7,7 +7,7 @@ import { usePlayerState } from '../usePlayer.ts';
 import { PlaylistCover } from './Cover.tsx';
 import { Logo } from './Icons.tsx';
 import { ImportButton } from './ImportButton.tsx';
-import { Equalizer } from './Indicators.tsx';
+import { PlayingDisc } from './Indicators.tsx';
 
 interface SidebarProps {
   playlists: LibraryPlaylist[];
@@ -27,14 +27,12 @@ export function Sidebar({ playlists, selected, onSelect, onImport }: SidebarProp
 
   return (
     <nav className="sidebar" aria-label="Playlists">
-      <div className="brand">
+      <p className="brand">
         <Logo />
-        <div>
-          <p className="brand__name">Polyphon</p>
-          <p className="brand__tagline">Music written as code. Every note synthesized in your browser.</p>
-        </div>
-      </div>
-      <h2 className="sidebar__heading">Playlists</h2>
+        <span className="brand__name">Polyphon</span>
+      </p>
+      <p className="tagline">Music written as code. Every note synthesized in your browser.</p>
+      <h2 className="sidebar__heading label">Playlists</h2>
       <ImportButton onImport={onImport} />
       <ul ref={list} className="sidebar__list">
         {playlists.map((playlist) => (
@@ -45,14 +43,17 @@ export function Sidebar({ playlists, selected, onSelect, onImport }: SidebarProp
               aria-current={playlist === selected ? 'page' : undefined}
               onClick={() => onSelect(playlist)}
             >
-              <span className="playlist-link__cover">
+              <span className="playlist-link__disc">
                 <PlaylistCover playlist={playlist} />
               </span>
-              <span className="playlist-link__text">
-                <span className="playlist-link__title">{playlist.title}</span>
-                <span className="playlist-link__meta">{plural(playlist.songs.length, 'song')}</span>
-              </span>
-              {playlist.id === playingFrom && <Equalizer />}
+              <span className="playlist-link__title">{playlist.title}</span>
+              {playlist.id === playingFrom ? (
+                <PlayingDisc />
+              ) : (
+                <span className="playlist-link__count" aria-label={plural(playlist.songs.length, 'song')}>
+                  {playlist.songs.length}
+                </span>
+              )}
             </button>
           </li>
         ))}

@@ -29,6 +29,11 @@ export function textWidth(text: string): number {
   return [...text].reduce((width, char) => width + (/[\u2e80-\u9fff\uac00-\ud7af\uff00-\uffef]/.test(char) ? 1.8 : 1), 0);
 }
 
+/** 7 → "07": track and channel numbers */
+export function twoDigits(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
 /** "1 song", "12 songs" */
 export function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? '' : 's'}`;
