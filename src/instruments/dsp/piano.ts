@@ -74,23 +74,31 @@ export function piano(sr: number, m: number, soft = false): Float32Array {
   const fe = (soft ? 1700 : 3000) * oct;
   // Hammer strike point (as a fraction of string length): about 1/8 for the bass, about 1/13 for the treble
   const beta = 1 / (8 + Math.max(0, m - 21) * 0.058);
+  // From the middle of the keyboard up, the felt stays on the string for about a period of the note, which filters the upper
+  // partials away (12 dB per octave above the cutoff: ~530 Hz at C4, 420 Hz from C5 up) and leaves the treble round; it fades in between C3 and C4
+  const felt = Math.min(1, Math.max(0, (m - 48) / 12));
+  const feltCut = (soft ? 0.8 : 1) * 420 * Math.pow(2, Math.max(0, 72 - m) / 36);
   // Decay: σ = base loss + b3·ω²; the early stage (handed over to the soundboard) is fast, the later stage (the tail) is slow
   const Tf = Ts / 2;
   const prompt = soft ? 0.55 : 0.6;
   // Frequency-dependent loss at the level measured on real strings (Chaigne and Askenfelt): the highs die well before the fundamental
   const b3 = soft ? 9e-9 : 6e-9;
+  /** [frequency, amplitude] of the first partials, for the sympathetic strings */
+  const struck: [number, number][] = [];
   for (let p = 1; p < 400; p++) {
     const fp = p * f0 * Math.sqrt(1 + B * p * p);
     if (fp > nyq) break;
     const lp = 1 / (1 + (fp / fk) * (fp / fk));
     const ex = Math.exp(-fp / fe);
     let amp = Math.sqrt((f0 / fp) * lp * ex);
+    amp *= Math.pow(1 + Math.pow(fp / feltCut, 4), -felt / 2);
     amp *= Math.abs(Math.sin(Math.PI * p * beta)) * 0.92 + 0.08;
     amp *= board(fp);
     if (amp < 3e-4) {
       if (fp > fk * 4) break;
       continue;
     }
+    if (p <= 8) struck.push([fp, amp]);
     const w2 = Math.pow(2 * Math.PI * fp, 2);
     const s1 = 6.9 / Tf + b3 * w2;
     const s2 = 6.9 / Ts + b3 * w2;
@@ -119,6 +127,7 @@ export function piano(sr: number, m: number, soft = false): Float32Array {
       }
     }
   }
+  sympathetic(acc, sr, m, struck, b3);
   const y = new Float32Array(n);
   for (let i = 0; i < n; i++) y[i] = acc[i];
   // Set the volume by the energy in the first 0.25 s after the attack (rather than the peak): every note sounds equally loud, and loudness is left to playback velocity
@@ -152,6 +161,40 @@ export function piano(sr: number, m: number, soft = false): Float32Array {
   const g = 0.25 / rms;
   for (let i = 0; i < n; i++) y[i] *= g;
   return tailFade(y, sr);
+}
+
+/**
+ * Sympathetic resonance: strings left free by the dampers (the whole keyboard with the pedal down; the top of the treble always)
+ * pick up this note's partials through the bridge. A string answers in its n-th mode when that mode lands within a Hz or two of a partial:
+ * the strings an octave and a twelfth around a note answer, an equal-tempered third (14 cents off) barely does.
+ * Each answers at its own frequency (stretched tuning and inharmonicity differ), blooming in over a tenth of a second and ringing
+ * with its own decay, so the sound grows a soft halo that beats gently against the struck strings.
+ * The bloom is slow, so short unpedalled notes are damped before it is heard; held and pedalled notes carry it.
+ */
+function sympathetic(acc: Float64Array, sr: number, m: number, struck: [number, number][], b3: number): void {
+  const n = acc.length;
+  for (const [fp, amp] of struck) {
+    if (fp > 4000) break;
+    for (const mode of [1, 2, 3]) {
+      const key = Math.round(69 + 12 * Math.log2(fp / mode / 440));
+      if (key === m || key < 21 || key > 108) continue;
+      const fs = 440 * Math.pow(2, (key - 69 + pianoStretch(key) / 100) / 12);
+      const f = mode * fs * Math.sqrt(1 + pianoB(key) * mode * mode);
+      const match = 1 / (1 + Math.pow((f - fp) / 1.5, 2));
+      const level = (amp * 0.12 * match) / mode;
+      if (level < 1e-4) continue;
+      const decay = Math.exp(-(6.9 / pianoSustain(key) + b3 * Math.pow(2 * Math.PI * f, 2)) / sr);
+      const bloom = Math.exp(-1 / (0.08 * sr));
+      const w = (2 * Math.PI * f) / sr;
+      let env = level;
+      let rise = 1;
+      for (let i = 0; i < n && env > level * 1e-3; i++) {
+        acc[i] += Math.sin(w * i) * env * (1 - rise);
+        rise *= bloom;
+        env *= decay;
+      }
+    }
+  }
 }
 
 /** Electric piano (Rhodes feel): 1:1 FM, modulation index decaying over time, plus a tuning-fork tine ring in the highs */
