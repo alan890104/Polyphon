@@ -37,10 +37,6 @@ export class NoteTimeline {
   readonly groups: readonly string[];
   /** Seconds per bar */
   readonly barSeconds: number;
-  /** Seconds per sixteenth-note step */
-  readonly stepSeconds: number;
-  /** The track group carrying the tune (punched in brass on the disc), or -1 */
-  readonly lead: number;
   /** Seconds the intro lasts */
   readonly introDuration: number;
   /** Seconds one pass of the body lasts */
@@ -67,8 +63,6 @@ export class NoteTimeline {
     this.sections = [intro, body];
     this.groups = groups;
     this.barSeconds = stepsPerBar(meter) * step;
-    this.stepSeconds = step;
-    this.lead = tuneTrack(body.notes, groups.length, step);
     this.introDuration = intro.duration;
     this.loopDuration = body.duration;
     this.passes = Math.max(1, passes);
@@ -101,49 +95,6 @@ export class NoteTimeline {
     const last = Math.min(this.passes - 1, Math.floor((to - this.introDuration) / body.duration));
     for (let pass = first; pass <= last; pass++) visitSection(body, this.introDuration + pass * body.duration, from, to, visit);
   }
-
-  /** Every note of one pass (the intro, then the body once) with starts in song seconds, for drawing the song as a disc */
-  onePass(): TimedNote[] {
-    const [intro, body] = this.sections;
-    const offset = this.introDuration;
-    return [...intro.notes, ...body.notes.map((n) => ({ ...n, start: n.start + offset, end: n.end + offset }))];
-  }
-}
-
-/** A tune lies above this MIDI pitch on average (E3), which keeps bass lines out */
-const TUNE_ABOVE = 52;
-
-/**
- * The track group that carries the tune (as the covers choose it): of the groups that play one note at a time above the bass,
- * the one with the most varied pitches and rhythms.
- */
-function tuneTrack(notes: readonly TimedNote[], groups: number, step: number): number {
-  const stats = Array.from({ length: groups }, () => ({ notes: 0, chords: 0, pitchSum: 0, pitches: new Set<number>(), lengths: new Set<number>(), last: -1 }));
-  for (const n of notes) {
-    if (n.pitch < 0) continue;
-    const s = stats[n.track];
-    // Pitches starting together are one chord
-    if (Math.abs(n.start - s.last) < 1e-6) {
-      s.chords++;
-      continue;
-    }
-    s.last = n.start;
-    s.notes++;
-    s.pitchSum += n.pitch;
-    s.pitches.add(n.pitch);
-    s.lengths.add(Math.round((n.end - n.start) / step));
-  }
-  let best = -1;
-  let bestScore = 0;
-  stats.forEach((s, i) => {
-    if (s.notes < 4 || s.chords > s.notes / 10 || s.pitchSum / s.notes < TUNE_ABOVE) return;
-    const score = s.pitches.size * s.lengths.size;
-    if (score > bestScore) {
-      best = i;
-      bestScore = score;
-    }
-  });
-  return best;
 }
 
 function visitSection(section: Section, offset: number, from: number, to: number, visit: (note: TimedNote, offset: number) => void): void {
@@ -192,7 +143,7 @@ function compileTracks(song: Song, tracks: Track[], step: number, groupOf: (trac
 }
 
 /** A step with the song's swing applied to on-grid steps (as the playback does) */
-function swungStep(song: Song, step: number): number {
+export function swungStep(song: Song, step: number): number {
   const i = Math.floor(step + 1e-6);
   if (Math.abs(step - i) >= 1e-6) return step;
   if (song.swing && i % 4 === 2) return step + song.swing * 2;

@@ -1,10 +1,9 @@
 // Cover disc: the song's disc, enlarged far past the screen, blurred and dimmed, turning once over the song; it brightens with
 // the bass.
 
-import { DiscGeometry, renderDisc } from '../disc.ts';
+import { discCanvas, EMPTY_DISC, songDisc, turnAt, type Disc } from '../../disc.ts';
 import { Layer2D } from '../layer2d.ts';
-import type { Theme } from '../themes.ts';
-import type { NoteTimeline } from '../timeline.ts';
+import { discPalette, type Theme } from '../themes.ts';
 import type { FrameData, LayerKind } from '../types.ts';
 import { vignette } from './ink.ts';
 
@@ -13,18 +12,17 @@ const SIZE = 640;
 
 class CoverDisc extends Layer2D {
   private disc: HTMLCanvasElement | null = null;
-  private discFor: NoteTimeline | null | undefined;
+  private discFor: Disc | null = null;
   private discTheme: Theme | null = null;
-  private geometry = new DiscGeometry(null);
 
   frame(f: FrameData): void {
     const { g, width, height } = this;
     const theme = f.theme;
-    if (this.discFor !== f.timeline || this.discTheme !== theme) {
-      this.discFor = f.timeline;
+    const disc = f.timeline ? songDisc(f.timeline.song) : EMPTY_DISC;
+    if (this.discFor !== disc || this.discTheme !== theme) {
+      this.discFor = disc;
       this.discTheme = theme;
-      this.disc = blurred(renderDisc(f.timeline, theme, SIZE));
-      this.geometry = new DiscGeometry(f.timeline);
+      this.disc = blurred(discCanvas(disc, 'full', SIZE, discPalette(theme)));
     }
     g.fillStyle = theme.ink;
     g.fillRect(0, 0, width, height);
@@ -32,7 +30,7 @@ class CoverDisc extends Layer2D {
       const d = Math.max(width, height) * 1.25 * (1 + f.bass * 0.015 * f.motion);
       g.save();
       g.translate(width / 2, height * 0.5);
-      g.rotate(this.geometry.turn(f.position) + f.time * 0.004 * f.motion);
+      g.rotate(turnAt(f.position, f.duration) * Math.PI * 2 + f.time * 0.004 * f.motion);
       g.globalAlpha = 0.3 + f.bass * 0.2;
       g.drawImage(this.disc, -d / 2, -d / 2, d, d);
       g.restore();

@@ -1,10 +1,9 @@
 // Circular spectrum: hairline bars radiating around the song's disc, which turns clockwise under a brass comb at 12 o'clock as the
 // song plays; each perforation lights in brass as it passes the comb and fades as it moves on, and the disc swells slightly on beats.
 
-import { DISC, DiscGeometry, renderDisc } from '../disc.ts';
+import { discCanvas, drawComb, drawHole, EMPTY_DISC, forEachLit, geometry, holesAt, songDisc, turnAt, type Disc, type Geometry } from '../../disc.ts';
 import { Layer2D } from '../layer2d.ts';
-import { alpha, type Theme } from '../themes.ts';
-import type { NoteTimeline } from '../timeline.ts';
+import { alpha, discPalette, type Theme } from '../themes.ts';
 import type { FrameData, LayerKind } from '../types.ts';
 import { sampleBands, soften } from './bands.ts';
 
@@ -16,8 +15,7 @@ const AFTERGLOW = 2.5;
 class CircularSpectrum extends Layer2D {
   private disc: HTMLCanvasElement | null = null;
   private discKey = '';
-  private discFor: NoteTimeline | null = null;
-  private geometry = new DiscGeometry(null);
+  private discFor: Disc | null = null;
   private values = new Float32Array(0);
   private radius = 0;
 
@@ -29,7 +27,8 @@ class CircularSpectrum extends Layer2D {
   frame(f: FrameData): void {
     const { g, width, height } = this;
     g.clearRect(0, 0, width, height);
-    this.prepareDisc(f.timeline, f.theme);
+    const disc = f.timeline ? songDisc(f.timeline.song) : EMPTY_DISC;
+    this.prepareDisc(disc, f.theme);
     const count = BARS[f.quality];
     if (this.values.length !== count) this.values = new Float32Array(count);
     sampleBands(f.bands, this.values, 0.04, 0.9);
@@ -39,16 +38,22 @@ class CircularSpectrum extends Layer2D {
     const cy = height / 2;
     const swell = 1 + f.pulse * 0.025 * f.motion + f.bass * 0.015 * f.motion;
     const r = this.radius * swell;
+    const geo = geometry(r * 2, 'full');
+    const turn = turnAt(f.position, f.duration);
 
     this.drawGlow(f, cx, cy, r);
     this.drawBars(f, cx, cy, r);
     g.save();
     g.translate(cx, cy);
-    g.rotate(this.geometry.turn(f.position));
-    if (this.disc) g.drawImage(this.disc, -r, -r, r * 2, r * 2);
-    this.drawLit(f, r);
+    g.rotate(turn * Math.PI * 2);
+    g.translate(-r, -r);
+    if (this.disc) g.drawImage(this.disc, 0, 0, r * 2, r * 2);
+    this.drawLit(f, disc, geo, turn);
     g.restore();
-    this.drawComb(f, cx, cy, r);
+    g.save();
+    g.translate(cx - r, cy - r);
+    drawComb(g, geo, f.theme.accent, 0.55 + f.level * 0.4, 1);
+    g.restore();
   }
 
   /** A faint warm light behind the disc that opens with the bass */
@@ -87,61 +92,24 @@ class CircularSpectrum extends Layer2D {
   }
 
   /** Perforations that passed the comb a moment ago: brass, fading as they move on */
-  private drawLit(f: FrameData, r: number): void {
-    const { g, geometry } = this;
-    if (!f.timeline) return;
-    g.lineCap = 'round';
-    g.strokeStyle = f.theme.lit;
-    f.timeline.forEach(f.position - AFTERGLOW, f.position, (n, offset) => {
-      const age = f.position - (n.start + offset);
-      if (age < 0 || age > AFTERGLOW) return;
-      const fade = (1 - age / AFTERGLOW) ** 1.5;
-      // A soft halo, then the hole itself
-      g.globalAlpha = fade * 0.25;
-      g.lineWidth = geometry.holeWidth(r, 2.6);
-      g.beginPath();
-      geometry.hole(g, n, r, offset, 2.6);
-      g.stroke();
-      g.globalAlpha = fade;
-      g.lineWidth = geometry.holeWidth(r, 1.3);
-      g.beginPath();
-      geometry.hole(g, n, r, offset, 1.3);
-      g.stroke();
-    });
-    g.globalAlpha = 1;
-  }
-
-  /** The comb at 12 o'clock: a brass hairline across the rows, and a small pointer outside the rim */
-  private drawComb(f: FrameData, cx: number, cy: number, r: number): void {
+  private drawLit(f: FrameData, disc: Disc, geo: Geometry, turn: number): void {
     const { g } = this;
-    const theme: Theme = f.theme;
-    g.lineCap = 'butt';
-    g.strokeStyle = alpha(theme.accent, 0.55 + f.level * 0.4);
-    g.lineWidth = Math.max(1, r / 120);
-    g.beginPath();
-    g.moveTo(cx, cy - r * DISC.rim);
-    g.lineTo(cx, cy - r * (DISC.hits - 0.04));
-    g.stroke();
-    const half = r * 0.03;
-    const tip = cy - r - 3;
-    g.fillStyle = theme.accent;
-    g.beginPath();
-    g.moveTo(cx - half, tip - half * 1.6);
-    g.lineTo(cx + half, tip - half * 1.6);
-    g.lineTo(cx, tip);
-    g.closePath();
-    g.fill();
+    forEachLit(holesAt(disc, 'full'), turn, AFTERGLOW / f.duration, (hole, glow) => {
+      const fade = glow ** 1.5;
+      // A soft halo, then the hole itself
+      drawHole(g, hole, geo, f.theme.lit, fade * 0.25, 2.6);
+      drawHole(g, hole, geo, f.theme.lit, fade, 1.3);
+    });
   }
 
   /** Draw the disc again when the song, the theme or the size changes */
-  private prepareDisc(timeline: NoteTimeline | null, theme: Theme): void {
+  private prepareDisc(disc: Disc, theme: Theme): void {
     const size = Math.round(this.radius * 2 * this.scale * 1.05);
     const key = `${theme.id}|${size}`;
-    if (this.disc && key === this.discKey && this.discFor === timeline) return;
-    this.discFor = timeline;
+    if (this.disc && key === this.discKey && this.discFor === disc) return;
+    this.discFor = disc;
     this.discKey = key;
-    this.geometry = new DiscGeometry(timeline);
-    this.disc = renderDisc(timeline, theme, size);
+    this.disc = discCanvas(disc, 'full', size, discPalette(theme));
   }
 }
 

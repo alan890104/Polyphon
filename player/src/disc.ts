@@ -1,12 +1,14 @@
 // Discs: a song's notes punched as perforations in a turning disc, the way a polyphon music box stores its tune.
 // Angle is time across one pass (intro, then the body once), radius is pitch within the song's own range, opacity is velocity,
-// and the tune itself (the lead track) is punched in brass. Covers are drawn once and kept as image URLs.
+// and the tune itself (the lead track) is punched in brass. Covers are drawn once and kept as image URLs; the Now playing disc and
+// the immersive view turn theirs under the comb and light each perforation as it passes.
 
 import { compileSection, type ScheduledNote, type Song, type Track } from 'polyphon';
 import { playable, trackName, type LibraryPlaylist, type ReadySong } from './library.ts';
+import { swungStep } from './visuals/timeline.ts';
 
 export interface Perforation {
-  /** Start, as a fraction of one turn */
+  /** Start, as a fraction of one turn: when it sounds, swing and strums included, so it passes the comb as it plays */
   at: number;
   /** Length, as a fraction of one turn (a hole shorter than it is wide is round) */
   length: number;
@@ -19,19 +21,21 @@ export interface Perforation {
 }
 
 export interface Disc {
-  /** In order around the disc */
+  /** In the score's order, which a thinned disc samples them in (so swing and strums never change which holes it keeps) */
   holes: Perforation[];
   /** Where each song starts, as fractions of a turn (a playlist's disc holds several songs) */
   marks: number[];
 }
 
 /**
- * How a disc is drawn at each size: a small one shows the music's texture, a large one its detail.
- * Pitches are punched on `tracks` concentric rows, like the tracks a polyphon's comb reads; `hole` is the width of a perforation.
+ * How a disc is drawn at each size: a small one shows the music's texture, a large one its detail, a full one (the immersive
+ * view's) every note. Pitches are punched on `tracks` concentric rows, like the tracks a polyphon's comb reads; `hole` is the
+ * width of a perforation; `pixels` is the size of its image.
  */
 const DISC_SIZES = {
   small: { pixels: 96, most: 120, tracks: 6, hole: 0.06 },
   large: { pixels: 560, most: 700, tracks: 18, hole: 0.019 },
+  full: { pixels: 1024, most: Infinity, tracks: 18, hole: 0.019 },
 } as const;
 export type DiscSize = keyof typeof DISC_SIZES;
 
@@ -47,11 +51,17 @@ export interface Geometry {
   line: number;
 }
 
+/** The colors a disc is drawn in: the stylesheet's brass on ink for the covers, the theme's in the immersive view */
 export interface Palette {
+  /** The spindle hole */
   ink: string;
+  /** The disc's face */
   disc: string;
+  /** Rings, and the accompaniment's perforations */
   paper: string;
+  /** The tune's perforations, and the comb */
   brass: string;
+  /** Perforations as they pass the comb */
   lit: string;
 }
 
@@ -90,12 +100,12 @@ export function playlistDisc(playlist: LibraryPlaylist): Disc {
   return disc;
 }
 
-/** The perforations drawn at a size: all of them, or an even sample of at most `most` that keeps the tune */
+/** The perforations drawn at a size, in order around the disc: all of them, or an even sample of at most `most` that keeps the tune */
 export function holesAt(disc: Disc, size: DiscSize): readonly Perforation[] {
   let sizes = thinned.get(disc);
   if (!sizes) thinned.set(disc, (sizes = new Map()));
   let holes = sizes.get(size);
-  if (!holes) sizes.set(size, (holes = thin(disc.holes, DISC_SIZES[size].most)));
+  if (!holes) sizes.set(size, (holes = [...thin(disc.holes, DISC_SIZES[size].most)].sort((a, b) => a.at - b.at)));
   return holes;
 }
 
@@ -104,16 +114,15 @@ export function discImage(disc: Disc, size: DiscSize): string {
   let urls = images.get(disc);
   if (!urls) images.set(disc, (urls = new Map()));
   let url = urls.get(size);
-  if (!url) urls.set(size, (url = discCanvas(disc, size, DISC_SIZES[size].pixels).toDataURL()));
+  if (!url) urls.set(size, (url = discCanvas(disc, size, DISC_SIZES[size].pixels, palette()).toDataURL()));
   return url;
 }
 
 /** A disc drawn on a new square canvas of `pixels`, leaving `inset` (a fraction of the radius) free around it */
-export function discCanvas(disc: Disc, size: DiscSize, pixels: number, inset = 0): HTMLCanvasElement {
+export function discCanvas(disc: Disc, size: DiscSize, pixels: number, colors: Palette, inset = 0): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = pixels;
-  const geo = geometry(pixels, size, inset);
-  const colors = palette();
+  canvas.width = canvas.height = Math.max(8, Math.round(pixels));
+  const geo = geometry(canvas.width, size, inset);
   const g = context2d(canvas);
   const { center: c, radius: r, line } = geo;
 
@@ -175,8 +184,17 @@ export function drawHole(g: CanvasRenderingContext2D, hole: Perforation, geo: Ge
   }
 }
 
-/** The comb at 12 o'clock: a hairline across the tracks, and a small pointer outside the rim */
-export function drawComb(g: CanvasRenderingContext2D, geo: Geometry, color: string, alpha: number): void {
+/** Each perforation that passed the comb less than `afterglow` (a fraction of a turn) before `turn`, with its glow: 1 as it passes, fading to 0 */
+export function forEachLit(holes: readonly Perforation[], turn: number, afterglow: number, visit: (hole: Perforation, glow: number) => void): void {
+  for (let i = firstFrom(holes, turn - afterglow); i < holes.length && holes[i].at <= turn; i++) {
+    const glow = 1 - (turn - holes[i].at) / afterglow;
+    // Rounding can leave the first one a hair past the afterglow
+    if (glow > 0) visit(holes[i], glow);
+  }
+}
+
+/** The comb at 12 o'clock: a hairline across the tracks, and a small pointer outside the rim (as opaque as the hairline unless `pointer` says) */
+export function drawComb(g: CanvasRenderingContext2D, geo: Geometry, color: string, alpha: number, pointer = alpha): void {
   const { center: c, radius: r, line } = geo;
   g.globalAlpha = alpha;
   g.strokeStyle = color;
@@ -189,6 +207,7 @@ export function drawComb(g: CanvasRenderingContext2D, geo: Geometry, color: stri
   g.stroke();
   const tip = c - r - line * 3;
   const half = r * 0.035;
+  g.globalAlpha = pointer;
   g.beginPath();
   g.moveTo(c - half, tip - half * 1.6);
   g.lineTo(c + half, tip - half * 1.6);
@@ -197,6 +216,12 @@ export function drawComb(g: CanvasRenderingContext2D, geo: Geometry, color: stri
   g.fill();
 }
 
+/** How far a disc has turned, 0-1, `position` seconds into a pass of `duration` seconds */
+export function turnAt(position: number, duration: number): number {
+  return duration > 0 ? Math.min(1, position / duration) : 0;
+}
+
+/** Where things sit on a disc drawn into a square of `pixels`, leaving `inset` (a fraction of the radius) free around it */
 export function geometry(pixels: number, size: DiscSize, inset = 0): Geometry {
   const radius = (pixels / 2) * (1 - inset);
   const { tracks, hole } = DISC_SIZES[size];
@@ -246,22 +271,26 @@ function punchOrNothing(song: Song): Perforation[] {
   }
 }
 
-/** Every note of one pass of the song, as perforations (a chord punches one hole per pitch) */
+/** Every note of one pass of the song, as perforations (a chord punches one hole per pitch), timed as the playback plays them */
 function punch(song: Song): Perforation[] {
   const meter = song.meter ?? 16;
   const sections = [song.intro ?? [], song.tracks].filter((tracks) => tracks.length).map((tracks) => ({ tracks, ...compileSection(tracks, meter) }));
   const body = sections.at(-1);
   if (!body) return [];
   const turn = sections.reduce((steps, s) => steps + s.duration, 0);
+  // Strums are in seconds, everything else here in steps
+  const stepSeconds = 60 / song.bpm / 4;
   const tune = tuneTrack(body.tracks, body.notes);
   const holes: (Omit<Perforation, 'pitch'> & { midi: number | null })[] = [];
   let offset = 0;
   for (const { tracks, notes, duration } of sections) {
     for (const note of notes) {
       const track = tracks[note.track];
-      const hole = { at: (offset + note.time) / turn, length: Math.min(note.duration, LONGEST) / turn, velocity: note.velocity, lead: trackName(track) === tune };
-      if (!note.pitches.length) holes.push({ ...hole, midi: null });
-      for (const midi of note.pitches) holes.push({ ...hole, midi: midi + (track.transpose ?? 0) });
+      const at = offset + swungStep(song, note.time);
+      const strum = (note.strum ?? 0) / stepSeconds;
+      const hole = { length: Math.min(note.duration, LONGEST) / turn, velocity: note.velocity, lead: trackName(track) === tune };
+      if (!note.pitches.length) holes.push({ ...hole, at: at / turn, midi: null });
+      note.pitches.forEach((midi, k) => holes.push({ ...hole, at: (at + k * strum) / turn, midi: midi + (track.transpose ?? 0) }));
     }
     offset += duration;
   }
@@ -272,9 +301,7 @@ function punch(song: Song): Perforation[] {
     low = Math.min(low, midi);
     high = Math.max(high, midi);
   }
-  return holes
-    .map(({ midi, ...hole }) => ({ ...hole, pitch: midi === null ? null : high > low ? (midi - low) / (high - low) : 0.5 }))
-    .sort((a, b) => a.at - b.at);
+  return holes.map(({ midi, ...hole }) => ({ ...hole, pitch: midi === null ? null : high > low ? (midi - low) / (high - low) : 0.5 }));
 }
 
 /** The track that carries the tune: of the tracks that play one note at a time above the bass, the one with the most varied pitches and rhythms */
@@ -318,12 +345,25 @@ function join(songs: ReadySong[]): Disc {
   return { holes, marks: songs.length > 1 ? marks : [] };
 }
 
-/** At most `most` perforations, sampled evenly; up to half of them are kept for the tune, so it stays legible */
+/** At most `most` perforations, sampled evenly and kept in their order; up to half of them are kept for the tune, so it stays legible */
 function thin(holes: readonly Perforation[], most: number): readonly Perforation[] {
   if (holes.length <= most) return holes;
   const tune = holes.filter((h) => h.lead);
-  const kept = sample(tune, Math.min(tune.length, Math.floor(most / 2)));
-  return [...kept, ...sample(holes.filter((h) => !h.lead), most - kept.length)].sort((a, b) => a.at - b.at);
+  const kept = new Set(sample(tune, Math.min(tune.length, Math.floor(most / 2))));
+  for (const hole of sample(holes.filter((h) => !h.lead), most - kept.size)) kept.add(hole);
+  return holes.filter((h) => kept.has(h));
+}
+
+/** The index of the first perforation at or after `at` (they are in order around the disc) */
+function firstFrom(holes: readonly Perforation[], at: number): number {
+  let low = 0;
+  let high = holes.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (holes[mid].at < at) low = mid + 1;
+    else high = mid;
+  }
+  return low;
 }
 
 function sample<T>(items: readonly T[], count: number): T[] {

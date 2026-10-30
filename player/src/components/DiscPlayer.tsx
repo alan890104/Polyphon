@@ -2,7 +2,7 @@
 // passes the comb, the way a polyphon plays its disc. The comb brightens a little with the music's level.
 
 import { useEffect, useMemo, useRef } from 'react';
-import { context2d, discCanvas, drawComb, drawHole, geometry, holesAt, palette, type Disc, type Palette, type Perforation } from '../disc.ts';
+import { context2d, discCanvas, drawComb, drawHole, forEachLit, geometry, holesAt, palette, turnAt, type Disc, type Palette, type Perforation } from '../disc.ts';
 import { useAnimationFrame } from '../useAnimationFrame.ts';
 import { usePlayer } from '../usePlayer.ts';
 
@@ -37,18 +37,18 @@ export function DiscPlayer({ disc, duration, analyser }: DiscPlayerProps) {
     const observer = new ResizeObserver(([entry]) => {
       const pixels = Math.round(entry.contentRect.width * devicePixelRatio);
       element.width = element.height = pixels;
-      still.current = discCanvas(disc, 'large', pixels, INSET);
+      still.current = discCanvas(disc, 'large', pixels, colors, INSET);
       shown.current.turn = -1;
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [disc]);
+  }, [disc, colors]);
 
   useAnimationFrame(() => {
     const element = canvas.current;
     if (!element || !still.current) return;
     level.current = Math.max(loudness(analyser, samples), level.current * LEVEL_FALL);
-    const turn = Math.min(1, player.state.position / duration);
+    const turn = turnAt(player.state.position, duration);
     if (turn === shown.current.turn && Math.abs(level.current - shown.current.level) < 0.01) return;
     shown.current = { turn, level: level.current };
     paint(context2d(element), still.current, holes, turn, AFTERGLOW / duration, level.current, colors);
@@ -69,24 +69,10 @@ function paint(g: CanvasRenderingContext2D, still: HTMLCanvasElement, holes: rea
   // The perforations that passed the comb a moment ago, fading as they move on
   g.shadowColor = colors.lit;
   g.shadowBlur = geo.hole * 2;
-  for (let i = firstFrom(holes, turn - afterglow); i < holes.length && holes[i].at <= turn; i++) {
-    drawHole(g, holes[i], geo, colors.lit, (1 - (turn - holes[i].at) / afterglow) ** 0.7, 1.3);
-  }
+  forEachLit(holes, turn, afterglow, (hole, glow) => drawHole(g, hole, geo, colors.lit, glow ** 0.7, 1.3));
   g.shadowBlur = 0;
   g.setTransform(1, 0, 0, 1, 0, 0);
   drawComb(g, geo, colors.brass, 0.5 + 0.5 * level);
-}
-
-/** The index of the first perforation at or after `at` (they are in order around the disc) */
-function firstFrom(holes: readonly Perforation[], at: number): number {
-  let low = 0;
-  let high = holes.length;
-  while (low < high) {
-    const mid = (low + high) >> 1;
-    if (holes[mid].at < at) low = mid + 1;
-    else high = mid;
-  }
-  return low;
 }
 
 /** The music's level, 0-1, from the analyser's waveform */

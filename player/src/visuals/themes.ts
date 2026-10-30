@@ -1,5 +1,7 @@
 // Colour themes. Brass is the house palette (ink, paper and one gilt accent); the others are bolder moods to switch to.
 
+import type { Palette } from '../disc.ts';
+
 export type ThemeId = 'brass' | 'moonlight' | 'ember' | 'aurora' | 'mono';
 
 export interface Theme {
@@ -88,6 +90,11 @@ export const THEMES: readonly Theme[] = [
 
 export function themeById(id: string): Theme {
   return THEMES.find((t) => t.id === id) ?? THEMES[0];
+}
+
+/** The theme's colours for the song's disc */
+export function discPalette(theme: Theme): Palette {
+  return { ink: theme.ink, disc: theme.raised, paper: theme.paper, brass: theme.accent, lit: theme.lit };
 }
 
 /** The colour of a track (by its index in the song) */
