@@ -5,7 +5,13 @@
 //   2. The ensemble is too fake: every player has different intonation, vibrato speed and bowing position, so the high partials spread out; two oscillators vibrating in sync are just a chorus.
 //   3. The body is not messy enough: a wooden body has dozens of narrow, irregular resonances, and as the vibrato sweeps the partials across them their strength keeps flickering.
 // So here every player is computed separately: a fixed intonation offset, slowly drifting intonation, their own vibrato, their own bowing point (the comb notches fall at different positions),
-// and bow noise that appears in sync with each slip of the bow on the string; all of that is summed and then passed through a body of several dozen modes.
+// and bow noise that appears in sync with each slip of the bow on the string; all of that is summed and then passed through a body of a hundred-odd modes.
+// Measured against the University of Iowa violin, cello and double bass recordings (sustained notes on every string), three things were still off:
+//   - the body's actual response did not follow its envelope: below the air resonance and above the bridge hill the modes' skirts piled up, so the
+//     open G of a violin had a fundamental as strong as its second partial (real: ~20 dB weaker) and the double bass was 10-20 dB too bright; and
+//     above 1 kHz the modes were too few and too broad for the vibrato to make the partials flicker (2-3 dB, real violins 5-15 dB) (bodyModes);
+//   - a corner fixed in hertz left the low strings as bright as the high ones (bowTable);
+//   - between the partials the noise floor was 6-14 dB cleaner than the recordings (bow noise raised, and rounded off with the tone).
 //
 // The sample has two parts: the attack (the bow has just gripped the string, vibrato has not begun) and a sustain section that can loop seamlessly.
 // All the modulation in the sustain section (vibrato, intonation drift, bow-pressure swell, bow noise) has the loop length as its period,
@@ -13,18 +19,17 @@
 
 import { rng } from './dsp/core.ts';
 
-/** Body: a spectral envelope ([Hz, dB] polyline) plus narrow modes scattered according to the envelope */
+/** Body: a spectral envelope ([Hz, dB] polyline, the average radiated response) plus narrow modes scattered according to it */
 export interface BodyDef {
   seed: number;
   env: [number, number][];
+  /** The lowest mode (the air resonance A0 sits just above it: nothing radiates below) and the highest */
   lo: number;
   hi: number;
-  /** Modes per octave */
+  /** Modes per octave at lo; the count grows with frequency */
   density: number;
   /** Q of the modes: low end, high end */
   q: [number, number];
-  /** Fraction passed straight through (not colored by the modes) */
-  dry: number;
   /** How far each mode jumps above and below the envelope (dB): the larger it is, the more uneven the body */
   rand: number;
 }
@@ -43,7 +48,7 @@ export interface BowDef {
   vibDelay: number;
   /** Range of the bowing point (fraction of the string length): each player sits somewhere in it */
   beta: [number, number];
-  /** Bow pressure: the frequency where the partials begin to roll off extra, [soft, hard] */
+  /** Bow force: the partial number where the rounded Helmholtz corner has cut the partials by 6 dB, [soft, hard] */
   corner: [number, number];
   /** Sustained bow noise (relative to the string tone) */
   noise: number;
@@ -85,13 +90,19 @@ function envAt(env: [number, number][], f: number): number {
   return env[env.length - 1][1];
 }
 
-/** One period of the bowed string: a sawtooth with the partials at integer multiples of the bowing point cut out, then rolled off by bow pressure; partials are only added up to maxF */
-function bowTable(f: number, beta: number, corner: number, maxF: number): Float32Array {
+/**
+ * One period of the bowed string: a sawtooth with the partials at integer multiples of the bowing point cut out, then rounded off; partials are only added up to maxF.
+ * The rounding of the Helmholtz corner (Cremer): every period the string's internal losses (a roughly constant loss factor in the gut or
+ * synthetic core and the windings, so partial k loses in proportion to k per period) smooth the corner, and every pass under the bow sharpens it again,
+ * the more so the harder the bow presses. In balance partial k is cut by 1 / (1 + (k / kc)²): the cut sits at a partial number, not a frequency,
+ * so low notes are darker at the same frequency: in the recordings a note on the lowest string has 7 dB (violin) and 16 dB (cello) less of its
+ * energy at 4-8 kHz than one on the highest; a corner fixed in hertz gave 2 and 5 dB.
+ */
+function bowTable(f: number, beta: number, kc: number, maxF: number): Float32Array {
   const t = new Float32Array(TABLE);
   const K = Math.max(1, Math.min(400, Math.floor(maxF / f)));
   for (let k = 1; k <= K; k++) {
-    const hz = k * f;
-    const a = ((0.1 + Math.abs(Math.sin(Math.PI * k * beta))) / k) / Math.sqrt(1 + (hz / corner) ** 2);
+    const a = (0.1 + Math.abs(Math.sin(Math.PI * k * beta))) / k / (1 + (k / kc) ** 2);
     // Compute sin(2πkn/N) with a rotation recurrence, much faster than calling Math.sin at every point
     const th = (2 * Math.PI * k) / TABLE;
     const c = Math.cos(th);
@@ -111,29 +122,45 @@ function bowTable(f: number, beta: number, corner: number, maxF: number): Float3
   return t;
 }
 
+/** A band-pass mode y = b·(x[n] - x[n-2]) - a1·y[n-1] - a2·y[n-2] (its gain folded into b) */
 interface Mode {
-  b0: number;
+  b: number;
   a1: number;
   a2: number;
-  g: number;
 }
 
-/** Scatter modes according to the envelope (band-pass, peak 0 dB); each seed is a different instrument */
+/** Modes per octave stop growing here: neighbouring modes already overlap */
+const MAX_DENSITY = 30;
+
+/**
+ * Scatter modes according to the envelope (band-pass); each seed is a different instrument.
+ * - A plate has roughly a constant number of modes per hertz, so per octave the count grows with frequency: a few isolated modes in the
+ *   low register (A0, B1-, B1+), a thicket above 1-2 kHz. There a ±20-cent vibrato sweeps each partial across peaks and dips and its level
+ *   flickers by 5-10 dB, as measured on real violins; with a sparse, broad body the partials sound static.
+ * - Each mode reaches the listener with its own sign (radiation is a transfer function, not the bridge's driving-point admittance), so far
+ *   from their peaks the skirts cancel instead of piling up: the response falls away below the lowest mode, where the air in the f-holes and
+ *   the plates' volume change are in antiphase (an open G on a violin, 196 Hz below A0, radiates its fundamental ~20 dB under the second
+ *   partial), and above the bridge hill.
+ * - A mode's peak is scaled so its power, spread over the gap to the next mode, matches the envelope: the envelope is the average response.
+ */
 function bodyModes(sr: number, b: BodyDef): Mode[] {
   const r = rng(b.seed);
   const out: Mode[] = [];
-  const oct = Math.log2(b.hi / b.lo);
-  const n = Math.round(oct * b.density);
-  for (let i = 0; i < n; i++) {
-    const f = b.lo * Math.pow(2, ((i + 0.5 + r() * 0.45) / n) * oct);
-    if (f > sr * 0.45) continue;
-    const u = Math.log2(f / b.lo) / oct;
-    const q = b.q[0] + (b.q[1] - b.q[0]) * u;
+  const l0 = Math.log2(b.lo);
+  const oct = Math.log2(b.hi) - l0;
+  const top = Math.log2(Math.min(b.hi, sr * 0.45));
+  for (let x = l0; ; ) {
+    const n = Math.min(MAX_DENSITY, b.density * Math.pow(2, (x - l0) * 0.6));
+    x += (1 + 0.8 * r()) / n;
+    if (x >= top) break;
+    const f = Math.pow(2, x);
+    const q = b.q[0] + ((b.q[1] - b.q[0]) * (x - l0)) / oct;
     const db = envAt(b.env, f) + r() * b.rand;
+    const g = (r() < 0 ? -1 : 1) * Math.pow(10, db / 20) * Math.sqrt((2 * q * Math.LN2) / (Math.PI * n));
     const w = (2 * Math.PI * f) / sr;
     const al = Math.sin(w) / (2 * q);
     const a0 = 1 + al;
-    out.push({ b0: al / a0, a1: (-2 * Math.cos(w)) / a0, a2: (1 - al) / a0, g: Math.pow(10, db / 20) });
+    out.push({ b: (g * al) / a0, a1: (-2 * Math.cos(w)) / a0, a2: (1 - al) / a0 });
   }
   return out;
 }
@@ -157,20 +184,24 @@ export function bowSample(sr: number, f: number, d: BowDef, loud: boolean, seed:
   const atk = loud ? d.attack[1] : d.attack[0];
   const maxF = sr * 0.4;
 
-  // All players share one stretch of bow noise whose period is the loop length (each reads from a different position): high-pass then low-pass, running two passes so the filter state joins up head to tail
+  // All players share one stretch of bow noise whose period is the loop length (each reads from a different position): high-pass then low-pass, running two passes so the filter state joins up head to tail.
+  // The noise rides on the slip, so the string rounds it off like the tone: two low-pass poles at the corner (kc partials, 2-6 kHz).
+  // Left flat to 6 kHz, the hiss was all a low cello note had above 4 kHz (12 dB more than a real C string); some hiss comes from the hair itself, so not below 2 kHz.
   const nz = new Float32Array(LS);
   {
     const raw = new Float32Array(LS);
     for (let i = 0; i < LS; i++) raw[i] = r();
     let lp = 0;
+    let lp2 = 0;
     let hp = 0;
-    const al = 1 - Math.exp((-2 * Math.PI * 6000) / sr);
+    const al = 1 - Math.exp((-2 * Math.PI * Math.min(6000, Math.max(2000, corner * f))) / sr);
     const ah = 1 - Math.exp((-2 * Math.PI * 700) / sr);
     for (let pass = 0; pass < 2; pass++) {
       for (let i = 0; i < LS; i++) {
         lp += al * (raw[i] - lp);
-        hp += ah * (lp - hp);
-        if (pass) nz[i] = lp - hp;
+        lp2 += al * (lp - lp2);
+        hp += ah * (lp2 - hp);
+        if (pass) nz[i] = lp2 - hp;
       }
     }
   }
@@ -283,25 +314,38 @@ export function bowSample(sr: number, f: number, d: BowDef, loud: boolean, seed:
     }
   }
 
-  // Body: the direct signal + a bank of narrow modes in parallel
+  // Body: a bank of narrow modes in parallel. They all take the same input difference x[n] - x[n-2], and run two at a time
   const modes = bodyModes(sr, d.body);
+  const dx = new Float32Array(N);
+  for (let i = 0; i < N; i++) dx[i] = sum[i] - (i >= 2 ? sum[i - 2] : 0);
   const out = new Float32Array(N);
-  const dry = d.body.dry;
-  for (let i = 0; i < N; i++) out[i] = sum[i] * dry;
-  for (const md of modes) {
-    let x1 = 0;
-    let x2 = 0;
-    let y1 = 0;
-    let y2 = 0;
-    const { b0, a1, a2, g } = md;
+  const none: Mode = { b: 0, a1: 0, a2: 0 };
+  for (let m = 0; m < modes.length; m += 2) {
+    const { b: pb, a1: pa1, a2: pa2 } = modes[m];
+    const { b: qb, a1: qa1, a2: qa2 } = modes[m + 1] ?? none;
+    let p1 = 0;
+    let p2 = 0;
+    let q1 = 0;
+    let q2 = 0;
     for (let i = 0; i < N; i++) {
-      const x = sum[i];
-      const y = b0 * (x - x2) - a1 * y1 - a2 * y2;
-      x2 = x1;
-      x1 = x;
-      y2 = y1;
-      y1 = y;
-      out[i] += g * y;
+      const x = dx[i];
+      const p = pb * x - pa1 * p1 - pa2 * p2;
+      const q = qb * x - qa1 * q1 - qa2 * q2;
+      p2 = p1;
+      p1 = p;
+      q2 = q1;
+      q1 = q;
+      out[i] += p + q;
+    }
+  }
+
+  // Loop seam: the lowest body modes ring for a few hundred milliseconds, so at the loop start they still carry a trace of the attack (up to -31 dB
+  // for a low bass note). Crossfade the last 60 ms of the loop into the 60 ms that lead into it, so the jump back to the loop start is seamless.
+  {
+    const X = Math.min(Math.round(sr * 0.06), A);
+    for (let j = 0; j < X; j++) {
+      const w = (j + 0.5) / X;
+      out[N - X + j] += w * (out[A - X + j] - out[N - X + j]);
     }
   }
 
@@ -334,15 +378,18 @@ export interface BowInst {
   share?: string;
 }
 
-// Body envelope: [Hz, dB]. The violin has an air resonance at 280 Hz, a main resonance at 450-550 Hz, a dip around 1.4 kHz, and a bridge peak at 2.5 kHz
-const VIOLIN_BODY: BodyDef = { seed: 11, lo: 200, hi: 9000, density: 9, q: [36, 16], dry: 0.1, rand: 7, env: [[200, -12], [280, 0], [480, 2], [560, 3], [720, -2], [1000, 0], [1400, -4], [1900, 3], [2400, 9], [3000, 6], [3800, -2], [5000, -10], [7000, -20], [9000, -28]] };
+// Body envelope: [Hz, dB], the average radiated response. Fitted, with the bow corner, to the sustained mf notes of the University of Iowa
+// violin, cello and double bass recordings (1/3-octave partial levels across every string). The violin: air resonance A0 at 280 Hz, the corpus
+// modes B1- and B1+ at 450-550 Hz, a dip around 700 Hz, the bridge hill at 2-4 kHz and a steep fall above 4-5 kHz. The cello sits an octave
+// and a half lower; the double bass radiates mostly 50-200 Hz and is dark above. Bodies without recordings keep the shape the old model actually produced.
+const VIOLIN_BODY: BodyDef = { seed: 11, lo: 200, hi: 9000, density: 9, q: [36, 70], rand: 7, env: [[200, -12], [280, -1], [480, 2], [560, 0], [720, -5], [1000, -1], [1400, -2], [1900, 3], [2400, 0], [3000, 5], [3800, 8], [5000, -1], [7000, -9], [9000, -16]] };
 /** String section: the averaged body of violins and violas, flatter */
-const SECTION_BODY: BodyDef = { seed: 41, lo: 160, hi: 8000, density: 6, q: [28, 12], dry: 0.22, rand: 5, env: [[150, -14], [240, -2], [350, 0], [500, 1], [700, -1], [1000, 0], [1400, -3], [2000, 0], [2600, 1], [3500, -5], [5000, -14], [8000, -26]] };
-const CELLO_BODY: BodyDef = { seed: 23, lo: 80, hi: 6000, density: 9, q: [34, 14], dry: 0.1, rand: 7, env: [[70, -14], [100, -2], [150, 0], [220, 2], [350, 0], [500, -2], [700, 0], [1000, -3], [1800, 1], [2500, -3], [4000, -13], [6000, -24]] };
-const BASS_BODY: BodyDef = { seed: 31, lo: 45, hi: 4000, density: 7, q: [26, 10], dry: 0.22, rand: 5, env: [[40, -10], [60, 0], [100, 2], [150, 0], [300, -2], [600, -4], [1000, -6], [1500, -10], [2500, -18], [4000, -28]] };
-const FIDDLE_BODY: BodyDef = { seed: 53, lo: 220, hi: 10000, density: 9, q: [36, 16], dry: 0.1, rand: 7, env: [[220, -12], [300, 0], [520, 2], [800, -2], [1100, 0], [1500, -4], [2200, 2], [3000, 6], [4000, 0], [6000, -10], [10000, -24]] };
+const SECTION_BODY: BodyDef = { seed: 41, lo: 160, hi: 8000, density: 6, q: [28, 36], rand: 5, env: [[150, -14], [240, 0], [350, 0], [500, 3], [700, -4], [1000, -2], [1400, 1], [2000, 3], [2600, 4], [3500, 0], [5000, -4], [8000, -16]] };
+const CELLO_BODY: BodyDef = { seed: 23, lo: 80, hi: 9000, density: 9, q: [34, 70], rand: 7, env: [[70, -19], [100, -4], [150, 1], [220, -3], [350, 2], [500, 0], [700, -4], [1000, -1], [1800, 7], [2500, 7], [4000, -7], [6000, -7], [9000, -16]] };
+const BASS_BODY: BodyDef = { seed: 31, lo: 36, hi: 6000, density: 7, q: [26, 48], rand: 5, env: [[36, -12], [45, -11], [60, -2], [100, 5], [150, 6], [200, -3], [300, -4], [500, -10], [1000, -11], [1600, -6], [2500, -9], [4000, -9], [6000, -11]] };
+const FIDDLE_BODY: BodyDef = { seed: 53, lo: 220, hi: 10000, density: 9, q: [36, 70], rand: 7, env: [[220, -12], [300, 3], [520, 4], [800, 0], [1100, -1], [1500, -2], [2200, 1], [3000, 4], [4000, 5], [6000, -3], [10000, -16]] };
 /** Morin khuur (horsehead fiddle): a skin-covered square body, a 900 Hz nasal tone, few highs */
-const MORIN_BODY: BodyDef = { seed: 67, lo: 150, hi: 7000, density: 7, q: [26, 12], dry: 0.14, rand: 6, env: [[150, -12], [240, 0], [400, -2], [900, 6], [1300, -2], [1700, -7], [2400, -3], [3500, -13], [5000, -22], [7000, -30]] };
+const MORIN_BODY: BodyDef = { seed: 67, lo: 150, hi: 7000, density: 7, q: [26, 40], rand: 6, env: [[150, -12], [240, 1], [400, -2], [900, 6], [1300, 0], [1700, -3], [2400, 0], [3500, -5], [5000, -9], [7000, -16]] };
 
 const section = (body: BodyDef, players: number): BowDef => ({
   players,
@@ -352,7 +399,7 @@ const section = (body: BodyDef, players: number): BowDef => ({
   vibDepth: 20,
   vibDelay: 0.2,
   beta: [0.07, 0.16],
-  corner: [2600, 5200],
+  corner: [7, 14],
   noise: 0.1,
   scrape: 0.6,
   attack: [0.12, 0.06],
@@ -385,14 +432,14 @@ export const BOWS = {
   strings: { def: section(SECTION_BODY, 7), zone: 3, rate: 0.75, attack: 0.02, release: 0.4, loudAt: 0.72, glide: 0.09, level: 0.89 },
   /** The slow version of the string section (soft, long): the same samples */
   strPad: { def: section(SECTION_BODY, 7), zone: 3, rate: 0.75, attack: 0.6, release: 0.9, loudAt: 2, glide: 0.09, level: 0.81, share: 'strings' },
-  violin: { def: solo(VIOLIN_BODY, 5.6, 22, 0.113, [3000, 6000], 0.05), zone: 3, rate: 0.75, attack: 0.02, release: 0.25, loudAt: 0.72, glide: 0.09, level: 0.57 },
-  cello: { def: solo(CELLO_BODY, 5.2, 18, 0.12, [1800, 3600], 0.05), zone: 3, rate: 0.5, attack: 0.02, release: 0.3, loudAt: 0.72, glide: 0.09, level: 0.66 },
+  violin: { def: solo(VIOLIN_BODY, 5.6, 22, 0.113, [8, 16], 0.1), zone: 3, rate: 0.75, attack: 0.02, release: 0.25, loudAt: 0.72, glide: 0.09, level: 0.57 },
+  cello: { def: solo(CELLO_BODY, 5.2, 18, 0.12, [8, 16], 0.2), zone: 3, rate: 0.5, attack: 0.02, release: 0.3, loudAt: 0.72, glide: 0.09, level: 0.66 },
   /** Folk fiddle: brighter, with faster vibrato */
-  fiddle: { def: solo(FIDDLE_BODY, 6.2, 12, 0.09, [4000, 8000], 0.06), zone: 3, rate: 0.75, attack: 0.015, release: 0.2, loudAt: 0.72, glide: 0.07, level: 0.6 },
+  fiddle: { def: solo(FIDDLE_BODY, 6.2, 12, 0.09, [11, 22], 0.12), zone: 3, rate: 0.75, attack: 0.015, release: 0.2, loudAt: 0.72, glide: 0.07, level: 0.6 },
   /** Morin khuur: horsehair bow, lots of breath noise, wide slow vibrato */
-  morin: { def: solo(MORIN_BODY, 4.4, 26, 0.15, [2200, 4000], 0.14), zone: 3, rate: 0.75, attack: 0.03, release: 0.3, loudAt: 0.72, glide: 0.14, level: 0.81 },
+  morin: { def: solo(MORIN_BODY, 4.4, 26, 0.15, [6, 11], 0.14), zone: 3, rate: 0.75, attack: 0.03, release: 0.3, loudAt: 0.72, glide: 0.14, level: 0.81 },
   /** Cello section: five players, for sustained notes and harmony in the low-mid register (use cello for solos) */
-  celli: { def: { ...section(CELLO_BODY, 5), vibDepth: 16, corner: [1500, 3000] }, zone: 3, rate: 0.5, attack: 0.03, release: 0.4, loudAt: 0.72, glide: 0.1, level: 0.66 },
+  celli: { def: { ...section(CELLO_BODY, 5), vibDepth: 16, corner: [7, 14], noise: 0.15 }, zone: 3, rate: 0.5, attack: 0.03, release: 0.4, loudAt: 0.72, glide: 0.1, level: 0.66 },
   /** Double bass section: three players */
-  contrabass: { def: { ...section(BASS_BODY, 3), vibDepth: 8, corner: [900, 1800], spread: 4 }, zone: 3, rate: 0.5, attack: 0.03, release: 0.35, loudAt: 0.72, glide: 0.1, level: 0.61 },
+  contrabass: { def: { ...section(BASS_BODY, 3), vibDepth: 8, corner: [8, 16], spread: 4 }, zone: 3, rate: 0.5, attack: 0.03, release: 0.35, loudAt: 0.72, glide: 0.1, level: 0.61 },
 } satisfies Record<string, BowInst>;

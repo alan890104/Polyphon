@@ -1,35 +1,61 @@
 // Short sampled notes for fast figures (much cheaper than live synthesis): spiccato strings and brass stabs.
 
-import { Biquad, normalize, rng, tailFade } from './core.ts';
+import { Biquad, rng, tailFade } from './core.ts';
 
-/** Spiccato strings: a set of detuned sawtooth harmonics, body resonance, the rustle of the bow hair, very short */
+/**
+ * Spiccato strings: the bow drops onto the string, draws a few periods of sawtooth (Helmholtz) motion, bounces off, and the string rings on freely.
+ * - Bowed for the first 40-65 ms: harmonics falling as 1/k through the body, the bite of the bow lightening as it bounces, and the rustle
+ *   of the hair catching the string.
+ * - Then free: each partial decays at its own rate. The string's internal losses and the bridge take more energy per second from the
+ *   upper partials (the decay rate grows with frequency), so they are gone within ~0.1 s while the fundamental rings on and the note
+ *   darkens as it dies, like a pizzicato. (One envelope on every partial kept the attack's bright tone to the end, like a gated synth.)
+ * - Five players a few cents and a few milliseconds apart: three copies at ±7 cents beat like a chorus.
+ */
 export function spicc(sr: number, m: number): Float32Array {
   const f = 440 * Math.pow(2, (m - 69) / 12);
   const y = new Float32Array(Math.floor(sr * 0.42));
   const nyq = sr * 0.42;
   const body = (hz: number) => 0.4 + 1.2 / (1 + ((hz - 450) / 250) ** 2) + 0.7 / (1 + ((hz - 1300) / 500) ** 2) + 0.5 / (1 + ((hz - 3000) / 900) ** 2);
   const r = rng(m * 5 + 1);
-  for (const det of [-7, 0, 7]) {
-    const ff = f * Math.pow(2, det / 1200);
+  // The bow bites and lightens as it bounces (shared by every partial)
+  const acc = new Float32Array(y.length);
+  for (let i = 0; i < y.length; i++) acc[i] = Math.min(1, i / sr / 0.008) * (0.25 + 0.75 * Math.exp(-i / sr / 0.06));
+  for (let p = 0; p < 5; p++) {
+    const ff = f * Math.pow(2, (5 * r()) / 1200);
+    const i0 = Math.floor(((r() + 1) / 2) * 0.012 * sr);
+    // The bow leaves the string
+    const i1 = i0 + Math.floor((0.052 + 0.012 * r()) * sr);
     for (let k = 1; k < 40; k++) {
       const hz = ff * k;
       if (hz > nyq) break;
-      const amp = (body(hz) / k) / (1 + (hz / 4500) ** 2);
+      // Decay rate of the free string (nepers per second): T60 ≈ 0.5 s for the fundamental of A3, 0.09 s at 3 kHz
+      const dk = Math.exp(-(6 + 0.025 * hz) / sr);
+      let e = (0.77 * body(hz)) / k / (1 + (hz / 4500) ** 2);
+      // A rotating phasor from a random phase (cheaper than Math.sin per sample)
       const w = (2 * Math.PI * hz) / sr;
-      let ph = r() * Math.PI;
-      for (let i = 0; i < y.length; i++) {
-        ph += w;
-        y[i] += Math.sin(ph) * amp;
+      const c = Math.cos(w);
+      const s = Math.sin(w);
+      const ph = r() * Math.PI;
+      let x = Math.cos(ph);
+      let z = Math.sin(ph);
+      for (let i = i0; i < y.length; i++) {
+        y[i] += z * e * acc[i - i0];
+        const nx = x * c - z * s;
+        z = x * s + z * c;
+        x = nx;
+        if (i >= i1) e *= dk;
       }
     }
   }
   const noise = new Biquad(sr, 'bp', Math.min(7000, f * 5), 1.2);
-  for (let i = 0; i < y.length; i++) {
-    const t = i / sr;
-    const env = Math.min(1, t / 0.008) * (0.25 + 0.75 * Math.exp(-t / 0.06)) * Math.exp(-t / 0.22);
-    y[i] = y[i] * env + noise.run(r()) * 0.6 * Math.exp(-t / 0.03);
-  }
-  return tailFade(normalize(y), sr);
+  for (let i = 0; i < y.length; i++) y[i] += noise.run(r()) * 0.6 * Math.exp(-i / sr / 0.03);
+  // Levelled on the first 150 ms (the old peak normalization left notes ±3 dB apart at random; this is their average)
+  let e = 0;
+  const w = Math.floor(sr * 0.15);
+  for (let i = 0; i < w; i++) e += y[i] * y[i];
+  const g = 0.24 / (Math.sqrt(e / w) || 1);
+  for (let i = 0; i < y.length; i++) y[i] *= g;
+  return tailFade(y, sr);
 }
 
 /**
