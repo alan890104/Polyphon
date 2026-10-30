@@ -126,7 +126,7 @@ const AMBIENCE = Object.fromEntries(
 /** Volume of live-synthesized instruments (roughly aligned with the sampled instruments) */
 const LIVE_LEVEL: Partial<Record<keyof typeof VOICES, number>> = {
   flute: 0.7, panflute: 0.7, ocarina: 0.7, whistle: 0.7,
-  oboe: 1.4, bassoon: 1.4, trumpet: 1.3, trombone: 1.1,
+  oboe: 1.4, bassoon: 1.4, sax: 1, tenorSax: 1, trumpet: 1.3, trombone: 1.1,
   choir: 0.36, choirO: 0.3, choirOo: 0.26, menChoir: 0.37, chant: 0.31, soprano: 0.55,
   throat: 0.6, organ: 1.2, organFull: 1.2, accordion: 1.4, drone: 2,
   warmPad: 1.3, darkPad: 1.3, airPad: 5, synthLead: 1.4, powerGtr: 1.4, muteGtr: 1.4,
@@ -134,7 +134,7 @@ const LIVE_LEVEL: Partial<Record<keyof typeof VOICES, number>> = {
 };
 
 /** Live instruments that can glide between notes */
-const LIVE_GLIDERS = new Set<string>(['flute', 'panflute', 'ocarina', 'whistle', 'clarinet', 'oboe', 'bassoon', 'horn', 'trumpet', 'trombone', 'soprano', 'synthLead', 'synthBass', 'sub']);
+const LIVE_GLIDERS = new Set<string>(['flute', 'panflute', 'ocarina', 'whistle', 'clarinet', 'oboe', 'bassoon', 'sax', 'tenorSax', 'horn', 'trumpet', 'trombone', 'soprano', 'synthLead', 'synthBass', 'sub']);
 /** Bowed instruments that can glide between notes */
 const BOWED_GLIDERS = new Set<string>(['violin', 'cello', 'fiddle', 'morin', 'strings']);
 

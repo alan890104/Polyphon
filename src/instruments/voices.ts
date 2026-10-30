@@ -1,4 +1,4 @@
-// Live-synthesized sustained instruments: flute, brass, choir, organ, accordion, throat singing (khoomei), chord pad, bass, distorted guitar, ambience.
+// Live-synthesized sustained instruments: flutes, reeds, saxophones, brass, choir, organ, accordion, throat singing (khoomei), chord pad, bass, distorted guitar, ambience.
 // Each note builds a small graph of Web Audio nodes; sampled instruments (plucked strings, bells, drums) are rendered offline in dsp/ instead.
 
 import { rng } from './dsp/core.ts';
@@ -22,7 +22,7 @@ export type Voice = (c: VoiceCall) => void;
 // ───────────────────────── Shared parts ─────────────────────────
 
 const waves = new WeakMap<BaseAudioContext, Map<string, PeriodicWave>>();
-/** A periodic wave from a custom harmonic table (organ, clarinet, oboe, brass) */
+/** A periodic wave from a custom harmonic table (organ, accordion) */
 function wave(ctx: BaseAudioContext, key: string, amps: number[]): PeriodicWave {
   let m = waves.get(ctx);
   if (!m) waves.set(ctx, (m = new Map()));
@@ -140,12 +140,15 @@ function gainNode(ctx: BaseAudioContext, v = 1): GainNode {
   return g;
 }
 
-/** ADSR: attack, decay to the sustain ratio, release starting at t+dur. All use explicit ramps (different implementations compute the same result). Returns the time the sound actually ends */
-function adsr(g: GainNode, t: number, dur: number, peak: number, a: number, d: number, s: number, r: number): number {
+/**
+ * ADSR: attack, decay to the sustain ratio, release starting at t+dur. All use explicit ramps (different implementations compute the same result). Returns the time the sound actually ends.
+ * The release falls exponentially to floor (a level, not a ratio: a louder peak falls faster in dB); a voice whose gain is normalized per note passes peak·1e-3 to keep its release independent of that.
+ */
+function adsr(g: GainNode, t: number, dur: number, peak: number, a: number, d: number, s: number, r: number, floor = 1e-4): number {
   const p = g.gain;
   const aa = Math.min(a, Math.max(0.003, dur * 0.9));
   const rel = t + Math.max(dur, aa + 0.005);
-  const sus = Math.max(1e-4, peak * s);
+  const sus = Math.max(floor, peak * s);
   p.setValueAtTime(0, t);
   p.linearRampToValueAtTime(peak, t + aa);
   const dEnd = t + aa + Math.max(0.001, d);
@@ -156,11 +159,11 @@ function adsr(g: GainNode, t: number, dur: number, peak: number, a: number, d: n
       lv = sus;
     } else {
       lv = peak * Math.pow(sus / peak, (rel - t - aa) / (dEnd - t - aa));
-      p.exponentialRampToValueAtTime(Math.max(1e-4, lv), rel);
+      p.exponentialRampToValueAtTime(Math.max(floor, lv), rel);
     }
   }
-  p.setValueAtTime(Math.max(1e-4, lv), rel);
-  p.exponentialRampToValueAtTime(1e-4, rel + r);
+  p.setValueAtTime(Math.max(floor, lv), rel);
+  p.exponentialRampToValueAtTime(floor, rel + r);
   p.setValueAtTime(0, rel + r + 0.005);
   return rel + r + 0.02;
 }
@@ -197,79 +200,272 @@ function panned(ctx: BaseAudioContext, dest: AudioNode, pan: number): AudioNode 
   return p;
 }
 
+// ───────────────────────── Lip and reed valves ─────────────────────────
+//
+// A brass player's lips and a saxophone's reed are valves that let the air into the instrument in puffs, once per cycle. Blown softly the valve
+// barely closes and the flow is nearly a sine; blown hard it slams shut, the puffs grow short and sharp, and (in brass) nonlinear steepening along
+// the bore adds more: the spectrum fills with harmonics. Below forte the n-th harmonic rises about n dB for every dB of the fundamental (Benade),
+// so a crescendo opens up the tone, and the upper harmonics of a forte note sit 20-40 dB higher, relative to the fundamental, than in a piano note.
+// The valve is a sine through the waveshaper x / (1 - Cx): for a sine of amplitude a the n-th harmonic falls as rⁿ, with r = (1 - √(1 - a²)) / a,
+// about a/2 when soft and close to 1 when loud (Beauchamp's nonlinear brass synthesis). The drive is set per note so the harmonics fall as e^(-f/F)
+// in hertz, with F growing with velocity. The envelope drives the waveshaper too: the harmonics come in one after another as the attack rises
+// (Risset's trumpet analysis), with a brief bright blip, and the tone darkens as it dies away.
+// An air jet blown across an edge (the flutes) is a nonlinear drive of the same kind: Fletcher measured that from piano to forte a flute's fundamental
+// grows about 10 dB while its second and third harmonics grow 20-30 dB. Because the harmonics fall off in hertz, a low note is rich and a high one
+// nearly a sine. The curve's odd and even parts can be weighted apart: x(1 + eCx) / (1 - C²x²) gives odd harmonics rⁿ and even ones e·rⁿ
+// (e = 1 is x / (1 - Cx)), for a bore that favours the odd ones.
+
+const VALVE_C = 0.99995;
+/** Highest a used (the harmonics then fall 0.3 dB each, enough for a forte pedal note), and the drive that gives it */
+const VALVE_A = 0.9995;
+const VALVE_MAX = VALVE_A / VALVE_C;
+/** The even harmonics' share, in the steps the curves are cached at */
+const evenStep = (e: number): number => Math.round(Math.min(1, Math.max(0, e)) * 20) / 20;
+const valveTables = new Map<number, Float32Array<ArrayBuffer>>();
+/** The valve's waveshaper curve x(1 + eCx) / (1 - C²x²), e being the even harmonics' share */
+function valveCurve(even: number): Float32Array<ArrayBuffer> {
+  const e = evenStep(even);
+  let c = valveTables.get(e);
+  if (!c) {
+    // Fine enough to draw the sharp puffs of a loud low note
+    const n = 32768;
+    c = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1;
+      c[i] = (x * (1 + e * VALVE_C * x)) / (1 - VALVE_C * VALVE_C * x * x);
+    }
+    valveTables.set(e, c);
+  }
+  return c;
+}
+
+/** Valve drive (input amplitude) for harmonics falling as e^(-f/F) */
+function valveDrive(f0: number, F: number): number {
+  const r = Math.exp(-f0 / Math.max(1, F));
+  return Math.min(VALVE_A, (2 * r) / (1 + r * r)) / VALVE_C;
+}
+
+/** Predicted RMS of the valve's output at drive A after a band-pass with first-order corners lo and hi (Hz) and an optional eq(f) gain, for level matching */
+function valveRms(sr: number, f0: number, A: number, lo: number, hi: number, even = 1, eq?: (f: number) => number): number {
+  const a = A * VALVE_C;
+  const r = (1 - Math.sqrt(1 - a * a)) / a;
+  let p = 0;
+  let rn = 1;
+  for (let n = 1; n * f0 < sr * 0.45 && rn > 1e-4; n++) {
+    rn *= r;
+    const w = n * f0;
+    const h = (((lo + hi) * w) / Math.sqrt((w * w + lo * lo) * (w * w + hi * hi))) * (n % 2 ? 1 : evenStep(even)) * (eq ? eq(w) : 1);
+    p += rn * rn * h * h;
+  }
+  return Math.sqrt(p * 2) / (VALVE_C * Math.sqrt(1 - a * a)) || 1;
+}
+
+/** A first-order high-pass at lo times a first-order low-pass at hi, as one band-pass biquad (Q below 0.5: two real poles) */
+function bandOf(ctx: BaseAudioContext, lo: number, hi: number): BiquadFilterNode {
+  return filt(ctx, 'bandpass', Math.sqrt(lo * hi), Math.sqrt(lo * hi) / (lo + hi));
+}
+
+interface ValveNote {
+  f: number;
+  t0: number;
+  end: number;
+  /** Fall-off of the harmonics (Hz) once the note settles */
+  F: number;
+  att: number;
+  /** When the release starts, and its length */
+  off: number;
+  rel: number;
+  /** Fall-off at the start of the attack and at its end, relative to F (default 0.3 and 1.1) */
+  start?: number;
+  blip?: number;
+  /** Room kept below the curve's pole for a modulation of the drive */
+  headroom?: number;
+  /** Share of the even harmonics (default 1) */
+  even?: number;
+}
+
+/**
+ * One valve: a sine through the waveshaper. Its drive starts dark, reaches a bright blip at the end of the attack, settles, and falls back in the
+ * release. Soft notes sit where the drive is nearly linear, so the start and the release are also held to at least 40% and 70% of the settled drive.
+ */
+function valve(ctx: BaseAudioContext, v: ValveNote): { s: OscillatorNode; pre: GainNode; out: AudioNode } {
+  const { f, t0, F } = v;
+  const drive = (k: number) => Math.min(VALVE_MAX - (v.headroom ?? 0), valveDrive(f, F * k));
+  const s = osc(ctx, 'sine', f, t0, v.end);
+  const pre = gainNode(ctx, 0);
+  const p = pre.gain;
+  p.setValueAtTime(Math.max(drive(v.start ?? 0.3), drive(1) * 0.4), t0);
+  p.linearRampToValueAtTime(drive(v.blip ?? 1.1), t0 + v.att);
+  p.setTargetAtTime(drive(1), t0 + v.att, 0.08);
+  p.setTargetAtTime(Math.max(drive(0.5), drive(1) * 0.7), v.off, v.rel);
+  const ws = ctx.createWaveShaper();
+  ws.curve = valveCurve(v.even ?? 1);
+  s.connect(pre).connect(ws);
+  return { s, pre, out: ws };
+}
+
+/** When adsr starts the release */
+const releaseAt = (t: number, dur: number, att: number): number => t + Math.max(dur, Math.min(att, Math.max(0.003, dur * 0.9)) + 0.005);
+
 // ───────────────────────── Woodwinds ─────────────────────────
 
-/** Flute family: sine + a few overtones, breath noise, the "chiff" of the attack, delayed vibrato. kind determines the overtone amount and the breath amount */
-function flute(harm: number[], breath: number, chiff: number, vibDepth: number): Voice {
+/**
+ * Flute family: an air jet driving a pipe (see the valves above), so the low register is rich and the top nearly a sine, and the tone opens up with
+ * dynamics. F: how fast the harmonics fall at velocity 1 (Hz); even: the even harmonics' share (a pipe stopped at the bottom, like the pan pipes,
+ * has mostly odd ones); breath noise and the "chiff" of the attack; the pitch starts a little sharp; a delayed vibrato.
+ */
+function flute(F: number, even: number, breath: number, chiff: number, vibDepth: number, level: number): Voice {
   return (c) => {
     const { ctx, t, f, vel, o } = c;
     const a = o.attack ?? 0.05;
     const r = o.release ?? 0.12;
     const g = gainNode(ctx, 0);
-    const end = adsr(g, t, c.dur, vel * 0.3, a, 0.2, 0.88, r);
-    g.connect(c.out);
-    const w = wave(ctx, `fl${harm.join(',')}`, harm);
-    const s = osc(ctx, w, f, t, end);
+    const Fv = F * Math.pow(Math.max(0.05, vel), 1.3) * (o.bright ?? 1);
+    const norm = valveRms(ctx.sampleRate, f, valveDrive(f, Fv), 120, 9000, even);
+    const peak = (vel * level) / norm;
+    const end = adsr(g, t, c.dur, peak, a, 0.2, 0.88, r, peak * 1e-3);
+    const band = bandOf(ctx, 120, 9000);
+    band.connect(g).connect(c.out);
+    const v = valve(ctx, { f, t0: t, end, F: Fv, att: a, off: releaseAt(t, c.dur, a), rel: r, start: 0.6, blip: 1.05, even });
+    v.out.connect(band);
+    const s = v.s;
     // The pitch starts slightly high and falls down to settle
     s.detune.setValueAtTime(18, t);
     s.detune.setTargetAtTime(0, t, 0.02);
-    s.connect(g);
-    // Breath noise and the attack "chiff" share one stretch of pre-filtered noise
+    // Breath noise and the attack "chiff" share one stretch of pre-filtered noise (scaled to sit against the tone as before: norm·√2)
     const ng = gainNode(ctx, 0);
-    ng.gain.setValueAtTime(chiff * vel * 1.2, t);
-    ng.gain.linearRampToValueAtTime(breath * (o.breath ?? 1), t + 0.05);
+    const k = norm * Math.SQRT2;
+    ng.gain.setValueAtTime(chiff * vel * 1.2 * k, t);
+    ng.gain.linearRampToValueAtTime(breath * (o.breath ?? 1) * k, t + 0.05);
     breathSrc(ctx, t, end).connect(ng).connect(g);
     vibrato(ctx, [s.detune], t, end, o.vibRate ?? 5.2, o.vib ?? vibDepth, o.vibDelay ?? 0.28);
     applyBends(s.frequency, c, 1, o.glide ?? 0.06);
   };
 }
 
-/** Reed woodwinds (clarinet, oboe, bassoon): a custom harmonic table + resonance peaks */
-function reed(key: string, harm: number[], formants: [number, number, number][], vibDepth: number): Voice {
+/**
+ * Reed woodwinds (clarinet, oboe, bassoon): the reed is a valve (see above), so the tone opens up with dynamics. F: how fast the harmonics fall at
+ * velocity 1 and middle C (Hz); even(f): the even harmonics' share at pitch f; lo, hi: the radiation's rise and the roll-off (Hz); formants:
+ * [frequency, Q, gain dB]; perPitch: how much F follows the pitch (0: the fall-off is fixed in hertz; the clarinet's odd harmonics fall off
+ * more per harmonic than per hertz, roughly as a square wave's do below the cutoff).
+ * The clarinet's cylindrical bore resonates only at odd multiples below the cutoff of its open tone holes (about 1.5-2 kHz): its low register is
+ * mostly odd harmonics, and the even ones come back as the second harmonic nears the cutoff, in the upper register. The oboe's and bassoon's
+ * conical bores keep them all.
+ */
+function reed(F: number, even: (f: number) => number, lo: number, hi: number, formants: [number, number, number][], vibDepth: number, level: number, perPitch = 0): Voice {
   return (c) => {
     const { ctx, t, f, vel, o } = c;
+    const att = o.attack ?? 0.035;
+    const rel = o.release ?? 0.1;
+    const e = even(f);
     const g = gainNode(ctx, 0);
-    const end = adsr(g, t, c.dur, vel * 0.2, o.attack ?? 0.035, 0.15, 0.85, o.release ?? 0.1);
-    const lp = filt(ctx, 'lowpass', Math.min(8000, 1800 + vel * 3500), 0.5);
-    lp.connect(g).connect(c.out);
-    let node: AudioNode = lp;
-    for (const [ff, q, gain] of formants) {
-      const p = filt(ctx, 'peaking', ff, q, gain);
-      p.connect(node);
-      node = p;
-    }
-    const s = osc(ctx, wave(ctx, key, harm), f, t, end);
-    s.connect(node);
-    vibrato(ctx, [s.detune], t, end, 5, o.vib ?? vibDepth, 0.35);
-    applyBends(s.frequency, c, 1, o.glide ?? 0.05);
+    const Fv = F * Math.pow(Math.max(0.05, vel), 1.3) * Math.pow(f / 262, perPitch) * (o.bright ?? 1);
+    const peak = (vel * level) / valveRms(ctx.sampleRate, f, valveDrive(f, Fv), lo, hi, e);
+    const end = adsr(g, t, c.dur, peak, att, 0.15, 0.85, rel, peak * 1e-3);
+    const band = bandOf(ctx, lo, hi);
+    let node: AudioNode = band;
+    for (const [ff, q, gain] of formants) node = node.connect(filt(ctx, 'peaking', ff, q, gain));
+    node.connect(g).connect(c.out);
+    const v = valve(ctx, { f, t0: t, end, F: Fv, att, off: releaseAt(t, c.dur, att), rel, even: e });
+    v.out.connect(band);
+    vibrato(ctx, [v.s.detune], t, end, 5, o.vib ?? vibDepth, 0.35);
+    applyBends(v.s.frequency, c, 1, o.glide ?? 0.05);
+  };
+}
+
+/** The clarinet's even harmonics: weak while the second harmonic sits below the tone-hole cutoff (about 1.7 kHz), returning above it */
+const clarinetEven = (f: number): number => {
+  const q = (2 * f) / 1700;
+  return 0.04 + (0.6 * q * q) / (1 + q * q);
+};
+
+/**
+ * Saxophone: a reed on a conical bore. The cone's resonances line up with every harmonic, so the reed's puffs keep them all (the clarinet's
+ * cylinder favours the odd ones), and the reed is the same kind of valve as a brass player's lips: mellow when soft, bright and edgy when loud.
+ * The body gives two formants (alto about 550 Hz and 1.5-2.5 kHz, tenor lower: f1 and f2) with a dip between them. The breath's edge grows
+ * with velocity, and a loud note growls a little: the throat roughens the airflow at about 30 Hz, which shakes the drive and so both the
+ * loudness and the brightness. Accented notes are tongued fast and scoop up from below; held notes get a late vibrato.
+ * o.growl scales the growl (0 for none) and o.breath the breath noise.
+ */
+function saxV(F: number, f1: number, f2: number, level: number): Voice {
+  // The two formants as peaking filters (gain in dB): their response, for level matching across the range
+  const formant = (w: number, fc: number, q: number) => 9 / (1 + q * q * (w / fc - fc / w) ** 2);
+  const eq = (w: number) => Math.pow(10, (formant(w, f1, 1.6) + formant(w, f2, 1.3)) / 20);
+  return (c) => {
+    const { ctx, t, f, vel, o } = c;
+    const att = o.attack ?? 0.018;
+    const rel = o.release ?? 0.12;
+    const g = gainNode(ctx, 0);
+    const lo = f1 * 0.45;
+    const body = bandOf(ctx, lo, 5000);
+    body.connect(filt(ctx, 'peaking', f1, 1.6, 9)).connect(filt(ctx, 'peaking', f2, 1.3, 9)).connect(g).connect(c.out);
+    // The saxophone's tone changes more with dynamics than the others': mellow when soft, edgy when loud
+    const Fv = F * Math.pow(Math.max(0.05, vel), 1.6) * (o.bright ?? 1);
+    // How far into forte: sets the growl, the breath edge and the scoop
+    const loud = Math.min(1, Math.max(0, (vel - 0.72) / 0.28));
+    // Near the curve's pole a small change of drive is a large change of tone, so the growl takes a share of the room left below it
+    const A = valveDrive(f, Fv);
+    const growl = 0.6 * loud * Math.min(1, o.growl ?? 1) * (VALVE_MAX - A);
+    const norm = valveRms(ctx.sampleRate, f, Math.min(VALVE_MAX - growl, A), lo, 5000, 1, eq);
+    const peak = (vel * level) / norm;
+    const end = adsr(g, t, c.dur, peak, att, 0.2, 0.85, rel, peak * 1e-3);
+    const v = valve(ctx, { f, t0: t, end, F: Fv, att, off: releaseAt(t, c.dur, att), rel, blip: 1.15, headroom: growl });
+    v.out.connect(body);
+    // Scoop: an accented note starts up to 70 cents flat and is lipped up to pitch
+    v.s.detune.setValueAtTime(-10 - 60 * loud, t);
+    v.s.detune.setTargetAtTime(0, t + 0.01, 0.025);
+    if (growl > 0) osc(ctx, 'sine', 27 + Math.random() * 7, t, end).connect(gainNode(ctx, growl)).connect(v.pre.gain);
+    // Breath: a puff as the tongue releases the reed, then the edge of the air in the mouthpiece, stronger the harder it is blown
+    const ng = gainNode(ctx, 0);
+    const edge = (o.breath ?? 1) * norm * 0.04 * (0.3 + loud);
+    ng.gain.setValueAtTime(edge * 4, t);
+    ng.gain.setTargetAtTime(edge, t + 0.01, 0.02);
+    breathSrc(ctx, t, end).connect(ng).connect(g);
+    vibrato(ctx, [v.s.detune], t, end, o.vibRate ?? 5.3, o.vib ?? 16, o.vibDelay ?? 0.4);
+    applyBends(v.s.frequency, c, 1, o.glide ?? 0.05);
   };
 }
 
 // ───────────────────────── Brass ─────────────────────────
+//
+// Brass: a lip valve (see above), the bell and the mouthpiece cup. The bell radiates the low harmonics poorly (rising about 6 dB per octave up to
+// its cutoff, then flat) and the cup rolls off the top: a first-order high-pass and a first-order low-pass. With the valve's fall-off they place
+// the formant: around 1.2-1.5 kHz for the trumpet, 500-600 Hz for the trombone, 300-400 Hz for the horn (whose bell faces away from the
+// listener and loses the highs above about 1.3 kHz), about 230 Hz for the tuba.
 
-/** Brass: the filter "blows open" on the attack, brighter the harder it is played; o.bright scales the brightness */
-function brassV(harm: number[], key: string, open: number, sweepT: number, detunes: number[], vibDepth: number): Voice {
+/**
+ * Brass. F: how fast the harmonics fall at velocity 1 (Hz, larger is brighter); lo, hi: the bell's radiation cutoff and the cup's low-pass (Hz);
+ * players: 1 for a soloist, more for a section; o.bright scales the brightness.
+ * A section's players are independent: each enters 4-30 ms apart, sits a few cents off and blows a little harder or softer,
+ * so the section shimmers rather than beating like phase-locked copies.
+ */
+function brassV(F: number, lo: number, hi: number, players: number, vibDepth: number, level: number): Voice {
   return (c) => {
     const { ctx, t, f, vel, o } = c;
+    const att = o.attack ?? 0.045;
+    const rel = o.release ?? 0.14;
     const g = gainNode(ctx, 0);
-    const end = adsr(g, t, c.dur, vel * 0.2, o.attack ?? 0.045, 0.25, 0.8, o.release ?? 0.14);
-    const top = Math.min(10000, f * (2 + open * vel * (o.bright ?? 1)) + 400);
-    const lp = filt(ctx, 'lowpass', top * 0.25, 1.1);
-    lp.frequency.setValueAtTime(Math.max(120, f * 0.9), t);
-    lp.frequency.linearRampToValueAtTime(top, t + sweepT);
-    lp.frequency.setTargetAtTime(top * 0.7, t + sweepT, 0.4);
-    lp.connect(g).connect(c.out);
-    const w = wave(ctx, key, harm);
-    const oscs = detunes.map((d, i) => {
-      const s = osc(ctx, w, f, t, end, d);
-      s.connect(panned(ctx, lp, detunes.length > 1 ? (i / (detunes.length - 1) - 0.5) * 0.5 : 0));
-      // A slight lip tremble on the attack
-      s.detune.setValueAtTime(d - 25, t);
-      s.detune.linearRampToValueAtTime(d, t + 0.04);
-      return s;
-    });
+    const bell = bandOf(ctx, lo, hi);
+    bell.connect(g).connect(c.out);
+    // Brightness: the harmonics' fall-off F grows with velocity
+    const Fv = F * Math.pow(Math.max(0.05, vel), 1.3) * (o.bright ?? 1);
+    const peak = (vel * level) / valveRms(ctx.sampleRate, f, valveDrive(f, Fv), lo, hi);
+    const end = adsr(g, t, c.dur, peak, att, 0.25, 0.8, rel, peak * 1e-3);
+    const off = releaseAt(t, c.dur, att);
+    const oscs: OscillatorNode[] = [];
+    for (let i = 0; i < players; i++) {
+      const solo = players === 1;
+      const t0 = t + (solo || i === 0 ? 0 : 0.004 + Math.random() * 0.026);
+      const d = solo ? 0 : (i / (players - 1) - 0.5) * 10 + (Math.random() - 0.5) * 6;
+      const v = valve(ctx, { f, t0, end, F: Fv * (solo ? 1 : 0.85 + Math.random() * 0.3), att, off, rel });
+      // The lips start a little flat and settle onto the note
+      v.s.detune.setValueAtTime(d - 25, t0);
+      v.s.detune.linearRampToValueAtTime(d, t0 + 0.04);
+      v.out.connect(solo ? bell : panned(ctx, bell, (i / (players - 1) - 0.5) * 0.5));
+      oscs.push(v.s);
+    }
     vibrato(ctx, oscs.map((s) => s.detune), t, end, 5, o.vib ?? vibDepth, 0.35);
-    oscs.forEach((s) => applyBends(s.frequency, c));
+    oscs.forEach((s) => applyBends(s.frequency, c, 1, o.glide ?? 0.07));
   };
 }
 
@@ -609,21 +805,25 @@ const riser: Voice = (c) => {
 // ───────────────────────── Catalog ─────────────────────────
 
 export const VOICES = {
-  flute: flute([1, 0.08, 0.03], 0.05, 0.25, 11),
-  /** Pan flute: lots of breath, few overtones, a very noticeable chiff on the attack */
-  panflute: flute([1, 0.03, 0.05], 0.12, 0.55, 8),
-  ocarina: flute([1, 0.02], 0.025, 0.1, 6),
+  flute: flute(1900, 1, 0.05, 0.25, 11, 0.22),
+  /** Pan flute: stopped pipes (odd harmonics), lots of breath, a very noticeable chiff on the attack */
+  panflute: flute(1230, 0.15, 0.12, 0.55, 8, 0.21),
+  /** Ocarina: a vessel (Helmholtz) resonator with no overtones of its own, nearly a sine */
+  ocarina: flute(540, 1, 0.025, 0.1, 6, 0.22),
   /** Tin whistle: bright, thin, with lots of ornaments */
-  whistle: flute([1, 0.2, 0.08, 0.05], 0.06, 0.35, 9),
-  clarinet: reed('cla', harmonics(12, 1, 0.12), [[1500, 1, 2]], 5),
-  oboe: reed('obo', harmonics(16, 0.6), [[1100, 1.8, 7], [2800, 2, 5]], 10),
-  bassoon: reed('bsn', harmonics(16, 0.7), [[500, 1.5, 6], [1150, 2, 4]], 6),
-  horn: brassV(harmonics(14, 1.5), 'hrn', 1.6, 0.09, [0], 5),
-  horns: brassV(harmonics(14, 1.5), 'hrn', 1.6, 0.1, [-6, 6], 4),
-  trumpet: brassV(harmonics(20, 1.05), 'tpt', 5, 0.04, [0], 7),
-  trumpets: brassV(harmonics(20, 1.05), 'tpt', 5, 0.05, [-7, 0, 7], 5),
-  trombone: brassV(harmonics(20, 1.15), 'tbn', 3, 0.07, [-5, 5], 3),
-  tuba: brassV(harmonics(12, 1.4), 'tba', 1.2, 0.08, [0], 2),
+  whistle: flute(2200, 1, 0.06, 0.35, 9, 0.22),
+  clarinet: reed(845, clarinetEven, 100, 3000, [[1500, 1, 2]], 5, 0.15, 0.67),
+  oboe: reed(2500, () => 1, 500, 6000, [[1100, 1.8, 7], [2800, 2, 5]], 10, 0.059),
+  bassoon: reed(700, () => 1, 150, 4000, [[500, 1.5, 6], [1150, 2, 4]], 6, 0.064),
+  horn: brassV(1100, 400, 1300, 1, 5, 0.15),
+  horns: brassV(1100, 400, 1300, 2, 4, 0.15),
+  trumpet: brassV(1700, 1300, 6000, 1, 7, 0.115),
+  trumpets: brassV(1700, 1300, 6000, 3, 5, 0.13),
+  trombone: brassV(1700, 700, 4000, 1, 3, 0.16),
+  tuba: brassV(500, 150, 1000, 1, 2, 0.145),
+  /** Saxophones: alto and tenor */
+  sax: saxV(4200, 560, 1900, 0.17),
+  tenorSax: saxV(3600, 420, 1450, 0.17),
   /** Choir (female voices on the vowels a, o, u) and male voices (A, O, U) */
   choir: choirV('a', 3, 12, 16),
   choirOo: choirV('u', 3, 10, 12),

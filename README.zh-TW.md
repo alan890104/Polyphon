@@ -184,7 +184,7 @@ Jukebox 會在第一次使用時建立 `AudioContext`，並在第一次點擊、
 | 撥弦 | `harp` `nylon` `steel` `lute` `dulcimer` `pizz` `pizzBass` |
 | 敲擊旋律與鐘 | `kalimba` `marimba` `vibes` `glock` `celesta` `musicbox` `bell` `chime` `steelpan` |
 | 弓弦 | `strings` `strPad` `violin` `cello` `celli` `contrabass` `fiddle` `morin` `spicc` |
-| 木管 | `flute` `panflute` `ocarina` `whistle` `clarinet` `oboe` `bassoon` |
+| 木管 | `flute` `panflute` `ocarina` `whistle` `clarinet` `oboe` `bassoon` `sax` `tenorSax` |
 | 銅管 | `horn` `horns` `trumpet` `trumpets` `trombone` `tuba` `brassStab` |
 | 人聲 | `choir` `choirOo` `choirO` `menChoir` `chant` `soprano` `throat` |
 | 墊音與持續音 | `warmPad` `glassPad` `darkPad` `airPad` `glass` `drone` |
@@ -199,7 +199,8 @@ Jukebox 會在第一次使用時建立 `AudioContext`，並在第一次點擊、
 - **撥弦**：Karplus-Strong，以符合物理的撥弦波形激發（第 n 個泛音 ∝ sin(nπ·撥弦位置)/n），弦損耗隨頻率增加，用 allpass 精準調音，再加上琴身共鳴（吉他、魯特琴、豎琴、揚琴、小提琴）；低音撥弦用加法合成。
 - **弓弦**：聲部裡每位演奏者分開算，各自有音準、顫音、運弓點和弓毛雜音，再通過有幾十個共鳴的琴身；持續段可以無縫循環。
 - **敲擊旋律與鐘**：依真實琴鍵、簧片與管鐘的分音比例做 modal synthesis（教堂鐘有 hum、prime、tierce、quint、nominal；管鐘的音高是由約 2 : 3 : 4 的分音聽出來的），琴槌的接觸時間會讓高音的泛音變圓潤。
-- **管樂、銅管與人聲**：即時振盪器，搭配諧波表、氣音、共振峰（合唱真的在唱母音）和每個音各自的顫音。
+- **管樂與銅管**：把嘴唇、簧片或氣流建模成一個閥門（正弦波通過非線性曲線），所以音色會像真的樂器一樣隨力度變亮：小聲的小號柔和、大聲的嘹亮，單簧管低音區以奇次泛音為主，薩克斯風吹得用力時會帶點沙啞。管身與喇叭口用濾波器和共振峰表現；聲部裡的每位演奏者進來的時間差幾毫秒、音準差幾音分。
+- **人聲**：共振峰（合唱真的在唱母音）、氣音和每個音各自的顫音。
 - **鼓**：鼓皮用圓形薄膜的振動模態計算，敲擊後音高會從略高處滑落，並帶有鼓棒或鼓槌的撞擊聲；定音鼓的音高來自鼓腔內空氣把模態推成約 1 : 1.5 : 2 : 2.5 : 3；鈸的「刷」聲在敲擊後由低往高擴散，高頻先消失；敲得越輕越暗；每種鼓有隨機變體，連打不會像機關槍。
 - **空間**：每首歌有自己程式產生的捲積殘響。
 

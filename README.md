@@ -184,7 +184,7 @@ The Jukebox creates its `AudioContext` on first use and starts it on the first c
 | Plucked strings | `harp` `nylon` `steel` `lute` `dulcimer` `pizz` `pizzBass` |
 | Mallets and bells | `kalimba` `marimba` `vibes` `glock` `celesta` `musicbox` `bell` `chime` `steelpan` |
 | Bowed strings | `strings` `strPad` `violin` `cello` `celli` `contrabass` `fiddle` `morin` `spicc` |
-| Woodwinds | `flute` `panflute` `ocarina` `whistle` `clarinet` `oboe` `bassoon` |
+| Woodwinds | `flute` `panflute` `ocarina` `whistle` `clarinet` `oboe` `bassoon` `sax` `tenorSax` |
 | Brass | `horn` `horns` `trumpet` `trumpets` `trombone` `tuba` `brassStab` |
 | Voices | `choir` `choirOo` `choirO` `menChoir` `chant` `soprano` `throat` |
 | Pads and drones | `warmPad` `glassPad` `darkPad` `airPad` `glass` `drone` |
@@ -199,7 +199,8 @@ How they are made:
 - **Plucked strings**: Karplus-Strong excited by a physically shaped pluck (the n-th harmonic ∝ sin(nπ·position)/n), with frequency-dependent string loss, an allpass for exact tuning and the resonances of the instrument's body (guitar, lute, harp, dulcimer, violin); bass plucks are additive.
 - **Bowed strings**: every player in a section is rendered separately, with their own intonation, vibrato, bowing point and bow noise, through a body with dozens of resonances. The sustain loops seamlessly.
 - **Mallets and bells**: modal synthesis with the partial ratios of the real bars, tines and tubes (church bells have hum, prime, tierce, quint and nominal; a tubular bell's pitch is heard from partials near 2 : 3 : 4), and the mallet's contact time rounding off the overtones of the high notes.
-- **Winds, brass and voices**: live oscillators with harmonic tables, breath noise, formant filters (choirs sing vowels) and per-note vibrato.
+- **Winds and brass**: the lips, the reed or the air jet are modelled as a valve (a sine through a nonlinear curve), so the tone brightens with dynamics the way the real instruments do: a soft trumpet is mellow and a loud one blazes, the clarinet keeps mostly odd harmonics in its low register, and the saxophone growls when pushed. Bore and bell are filters and formants; section players enter a few milliseconds apart and sit a few cents off.
+- **Voices**: formant filters (choirs sing vowels), breath noise and per-note vibrato.
 - **Drums**: drumheads as circular-membrane modes that glide as the head settles, with the stick or beater's click; timpani tuned by the air in the kettle (modes near 1 : 1.5 : 2 : 2.5 : 3); cymbal washes that bloom upward after the strike and lose their highs first; velocity-dependent brightness; and random variants, so repeated hits never sound identical.
 - **Rooms**: a procedural convolution reverb per song.
 
