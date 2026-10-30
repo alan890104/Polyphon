@@ -22,5 +22,14 @@ export const playlists: Playlist[] = [
       { id: 'night-waltz', load: () => load(import('./demo/night-waltz.ts')) },
     ],
   },
+  {
+    id: 'night',
+    title: 'Night Pieces',
+    description: 'The opening of Beethoven’s Moonlight Sonata, note for note, and an original piano ballad.',
+    songs: [
+      { id: 'moonlight', load: () => load(import('./classics/moonlight.ts')) },
+      { id: 'after-midnight', load: () => load(import('./demo/after-midnight.ts')) },
+    ],
+  },
   ...eldorPlaylists,
 ];

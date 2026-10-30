@@ -4,6 +4,7 @@
 //   Declare  defineSong: tempo, room, tracks (instrument + part)
 //   Play     Jukebox: crossfades, preloading, ducking, pause and seek
 //   Export   renderSong + encodeWav
+//   Import   songFromMidi
 //   Extend   registerInstrument
 
 export { melody, rhythm, type RhythmOptions } from './notation/melody.ts';
@@ -19,5 +20,6 @@ export { Performance, type PerformanceOptions, type PerformanceTrack, type SongP
 export { prepareSong, prepareSongSync } from './engine/prepare.ts';
 export { renderSong, encodeWav, type RenderOptions } from './engine/render.ts';
 export { compileSection, type CompiledSection, type ScheduledNote } from './engine/compile.ts';
+export { songFromMidi, type MidiImportOptions } from './midi.ts';
 
 export { registerInstrument, instrumentNames, type InstrumentName, type CustomInstrument, type CustomSampledInstrument, type CustomSynthInstrument, type SynthNote } from './instruments/registry.ts';
