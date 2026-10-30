@@ -195,7 +195,7 @@ The Jukebox creates its `AudioContext` on first use and starts it on the first c
 
 How they are made:
 
-- **Piano**: modal synthesis of every string (one to three per note, slightly detuned), with inharmonicity, stretched tuning, two-stage decay, frequency-dependent string loss, a soundboard, hammer and damper noises, and velocity-dependent brightness.
+- **Piano**: modal synthesis of every string (one to three per note, slightly detuned), with inharmonicity, stretched tuning, two-stage decay and frequency-dependent string loss; a hammer whose felt rounds off the treble; sympathetic resonance from the other strings; a soundboard, damper noise and a faint ring after release; velocity-dependent brightness; and the keyboard spread across the stereo field.
 - **Plucked strings**: Karplus-Strong with an allpass for exact tuning and a comb filter for the pluck position; bass plucks are additive.
 - **Bowed strings**: every player in a section is rendered separately, with their own intonation, vibrato, bowing point and bow noise, through a body with dozens of resonances. The sustain loops seamlessly.
 - **Mallets and bells**: modal synthesis with measured partial ratios (church bells have hum, prime, tierce, quint and nominal).
