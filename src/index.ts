@@ -16,7 +16,7 @@ export { midi, frequency, noteName, parseChord, voiceChord, scaleDegree, remapTo
 export { defineSong, songDuration, DEFAULT_REVERB, type Song, type Track, type Reverb, type Delay, type MasterEq } from './song.ts';
 
 export { Jukebox, type JukeboxOptions, type JukeboxState, type PlayOptions, type DuckOptions, type SongSource } from './engine/jukebox.ts';
-export { Performance, type PerformanceOptions, type PerformanceTrack, type SongPosition } from './engine/performance.ts';
+export { Playback, type PlaybackOptions, type PlaybackTrack, type SongPosition } from './engine/playback.ts';
 export { prepareSong, prepareSongSync } from './engine/prepare.ts';
 export { renderSong, encodeWav, type RenderOptions } from './engine/render.ts';
 export { compileSection, type CompiledSection, type ScheduledNote } from './engine/compile.ts';

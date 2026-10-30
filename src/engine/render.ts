@@ -2,7 +2,7 @@
 
 import { songDuration, type Song } from '../song.ts';
 import { createOutputStage } from './output.ts';
-import { Performance } from './performance.ts';
+import { Playback } from './playback.ts';
 import { prepareSongSync } from './prepare.ts';
 
 export interface RenderOptions {
@@ -21,8 +21,8 @@ export async function renderSong(song: Song, { duration, loops = 1, sampleRate =
   const length = duration ?? intro + loops * loop + 3;
   const ctx = new OfflineAudioContext(2, Math.ceil(length * sampleRate), sampleRate);
   prepareSongSync(ctx, song);
-  const perf = new Performance(ctx, createOutputStage(ctx, ctx.destination), song, { at: 0.05, loops });
-  perf.schedule(length);
+  const playback = new Playback(ctx, createOutputStage(ctx, ctx.destination), song, { at: 0.05, loops });
+  playback.schedule(length);
   return ctx.startRendering();
 }
 

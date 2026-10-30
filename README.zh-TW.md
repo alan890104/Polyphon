@@ -172,7 +172,7 @@ music.playOnce(victoryJingle);            // 疊在上面播
 music.stop();
 ```
 
-`play` 在曲子開始時回傳 `Performance`；如果在準備好之前又要求了別首，則回傳 `null`。`Performance` 提供 `position()`、`duration`、`introDuration`、`loopDuration`；它的 `tracks` 可以逐軌靜音（`track.muted = true`），並提供 `output` 節點接音量表；有結尾的曲子播完時 `finished` 會 resolve。`play` 傳入 `{ loops: n }` 可以在播完 n 輪後結束。
+`play` 在曲子開始時回傳 `Playback`；如果在準備好之前又要求了別首，則回傳 `null`（`music.playback` 是目前這一個）。`Playback` 提供 `position()`、`duration`、`introDuration`、`loopDuration`；它的 `tracks` 可以逐軌靜音（`track.muted = true`），並提供 `output` 節點接音量表；有結尾的曲子播完時 `finished` 會 resolve。`play` 傳入 `{ loops: n }` 可以在播完 n 輪後結束。
 
 Jukebox 會在第一次使用時建立 `AudioContext`，並在第一次點擊、觸控或按鍵時啟動。要跟音效共用同一個 context，傳入 `context` 和 `destination` 即可。
 

@@ -18,7 +18,6 @@ const r12 = (bars: number) => rest(bars, M);
 // ── Harmony
 const cA = 'G | F | G | D7 | G | F | C | F:6 G:6';
 const cC = 'C | G | F | G | C | Em | Am | F:6 G:6';
-const cW = 'Em | % | Cmaj7 | % | G | % | D | % | Em | % | Cmaj7 | % | Am7 | % | Dsus4 | D';
 /** The glass pad's whale-song harmony: the C chord becomes add9, with the major seventh left to the glass harmonica */
 const cWpad = 'Em | % | Cadd9 | % | G | % | D | % | Em | % | Cadd9 | % | Am7 | % | Dsus4 | D';
 

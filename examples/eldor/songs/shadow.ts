@@ -8,7 +8,7 @@
 // A': the waltz returns; in the last 8 bars the celesta gently follows the music box in unison; in the second-to-last bar it turns to a C major triad again, stopping on F#7 and leading back to the beginning.
 // Crickets run throughout; a low bell is struck at the start of each of the B and C sections.
 
-import { arpeggio, bassline, chords, melody, pad, rest, roots, scaleVelocity, sequence, strum, type Song } from 'polyphon';
+import { arpeggio, bassline, chords, melody, rest, roots, scaleVelocity, sequence, strum, type Song } from 'polyphon';
 
 const M = 12;
 const P = (s: string) => chords(s, M);

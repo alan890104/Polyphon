@@ -1,4 +1,4 @@
-// A song being played. Notes are scheduled ahead of time in small windows (call schedule() regularly, as the Jukebox does),
+// A song being played (one playback). Notes are scheduled ahead of time in small windows (call schedule() regularly, as the Jukebox does),
 // so timing stays sample-accurate while nothing is computed during playback except starting buffers and voices.
 
 import { getInstrument } from '../instruments/registry.ts';
@@ -8,7 +8,7 @@ import { DEFAULT_REVERB, type Song, type Track } from '../song.ts';
 import { compileSection, type CompiledSection, type ScheduledNote } from './compile.ts';
 import { createMixer } from './mixer.ts';
 
-export interface PerformanceOptions {
+export interface PlaybackOptions {
   /** When to start, in context seconds (default: 80 ms from now) */
   at?: number;
   /** Start this many seconds into the song (default 0) */
@@ -20,7 +20,7 @@ export interface PerformanceOptions {
 }
 
 /** One track of a playing song, for mixers and meters */
-export interface PerformanceTrack {
+export interface PlaybackTrack {
   readonly name: string;
   readonly instrument: string;
   readonly section: 'intro' | 'loop';
@@ -29,7 +29,7 @@ export interface PerformanceTrack {
   muted: boolean;
 }
 
-/** Where a performance is in its song */
+/** Where a playback is in its song */
 export interface SongPosition {
   /** Seconds since the start of the song */
   seconds: number;
@@ -43,12 +43,12 @@ export interface SongPosition {
 const INTRO = 0;
 const BODY = 1;
 
-export class Performance {
+export class Playback {
   readonly song: Song;
   readonly context: BaseAudioContext;
   /** The song's output node */
   readonly output: GainNode;
-  readonly tracks: readonly PerformanceTrack[];
+  readonly tracks: readonly PlaybackTrack[];
   /** Seconds */
   readonly introDuration: number;
   /** Seconds for one pass of the body */
@@ -73,7 +73,7 @@ export class Performance {
   private state: 'playing' | 'ended' | 'stopped' = 'playing';
   private resolveFinished!: () => void;
 
-  constructor(context: BaseAudioContext, destination: AudioNode, song: Song, options: PerformanceOptions = {}) {
+  constructor(context: BaseAudioContext, destination: AudioNode, song: Song, options: PlaybackOptions = {}) {
     this.context = context;
     this.song = song;
     const meter = song.meter ?? 16;
@@ -242,7 +242,7 @@ function sustains(track: Track): boolean {
   return def.kind === 'live' || !!def.bow || !!def.loop;
 }
 
-function trackHandles(tracks: Track[], inputs: GainNode[], section: 'intro' | 'loop'): PerformanceTrack[] {
+function trackHandles(tracks: Track[], inputs: GainNode[], section: 'intro' | 'loop'): PlaybackTrack[] {
   return tracks.map((track, i) => {
     const input = inputs[i];
     let muted = false;

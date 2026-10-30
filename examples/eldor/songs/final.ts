@@ -22,7 +22,6 @@ const cC = 'Cm | Cm | Ab | Ab | Fm | Fm | G | G7';
 const cD = 'C:32 | Am:32 | F:32 | G:32 | C:32 | Am:32 | Dm7:16 G7:16 | C:32';
 const cE = 'Cm | Ab:12 G:4 | Fm | G7';
 const A = chords(cA), B = chords(cB), C = chords(cC), D = chords(cD), E = chords(cE);
-const LOOP = chords(`${cA} | ${cB} | ${cA} | ${cC} | ${cD} | ${cE}`);
 
 // ── Melody
 /** Vald's theme: the G -> Eb minor sixth (the minor version of the leitmotif), all in a 3+3+2 rhythm */

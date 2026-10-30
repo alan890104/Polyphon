@@ -3,7 +3,7 @@
 
 import type { Song } from '../song.ts';
 import { createOutputStage } from './output.ts';
-import { Performance } from './performance.ts';
+import { Playback } from './playback.ts';
 import { prepareSong, prepareSongSync } from './prepare.ts';
 
 /** A song, or a function that loads one (`() => import('./songs/title.ts')` works: a module's default export is used) */
@@ -59,13 +59,13 @@ export class Jukebox {
   private token = 0;
   /** The song asked for last (it may still be loading) */
   private wanted: SongSource | null = null;
-  private pending: Promise<Performance | null> | null = null;
+  private pending: Promise<Playback | null> | null = null;
   private song: Song | null = null;
   /** The loop count the current song was asked to play with */
   private loops: number | undefined;
-  private perf: Performance | null = null;
+  private active: Playback | null = null;
   private pausedAt: number | null = null;
-  /** Mute states to carry into the next performance of the same song (after a seek or a pause) */
+  /** Mute states to carry into the next playback of the same song (after a seek or a pause) */
   private carry = new Set<string>();
   /** Preloads queue up behind each other, so they never compete with each other for the main thread */
   private preloads: Promise<unknown> = Promise.resolve();
@@ -89,21 +89,21 @@ export class Jukebox {
     return this.song;
   }
 
-  /** The playing performance, for positions, durations and per-track mixing */
-  get performance(): Performance | null {
-    return this.perf;
+  /** The current playback, for positions, durations and per-track mixing (a new one starts after every seek or resume) */
+  get playback(): Playback | null {
+    return this.active;
   }
 
   get state(): JukeboxState {
     if (this.pausedAt !== null) return 'paused';
     if (this.pending) return 'loading';
-    return this.perf?.playing ? 'playing' : 'idle';
+    return this.active?.playing ? 'playing' : 'idle';
   }
 
   /** Seconds into the current song */
   get position(): number {
     if (this.pausedAt !== null) return this.pausedAt;
-    return this.perf ? this.perf.position().seconds : 0;
+    return this.active ? this.active.position().seconds : 0;
   }
 
   get volume(): number {
@@ -118,19 +118,20 @@ export class Jukebox {
   /**
    * Play a song (by name, or a song / loader), crossfading from the one before.
    * Asking for the song that is already playing does nothing; asking for a paused one resumes it.
-   * Resolves with the performance once it starts, or null if another song was asked for before this one was ready.
+   * Resolves with the playback once it starts, or null if another song was asked for before this one was ready.
    */
-  play(song: string | SongSource, options: PlayOptions = {}): Promise<Performance | null> {
+  play(song: string | SongSource, options: PlayOptions = {}): Promise<Playback | null> {
     const source = this.resolve(song);
     if (source === this.wanted) {
       if (this.pausedAt !== null) {
         this.resume();
-        return Promise.resolve(this.perf);
+        return Promise.resolve(this.active);
       }
       if (this.pending) return this.pending;
-      if (this.perf?.playing) return Promise.resolve(this.perf);
+      if (this.active?.playing) return Promise.resolve(this.active);
     }
     this.halt(options.fadeOut ?? 0.9);
+    this.carry = new Set();
     this.wanted = source;
     this.loops = options.loops;
     this.pending = this.begin(source, this.token, options);
@@ -148,9 +149,9 @@ export class Jukebox {
 
   /** Pause the current song (resume() continues from the same point) */
   pause(): void {
-    if (!this.perf?.playing) return;
-    const at = this.perf.position().seconds;
-    this.carry = mutedTracks(this.perf);
+    if (!this.active?.playing) return;
+    const at = this.active.position().seconds;
+    this.carry = mutedTracks(this.active);
     this.halt(0.12);
     this.pausedAt = at;
   }
@@ -169,9 +170,9 @@ export class Jukebox {
       this.pausedAt = Math.max(0, seconds);
       return;
     }
-    if (!this.song || !this.perf) return;
-    this.carry = mutedTracks(this.perf);
-    this.perf.stop(0.12);
+    if (!this.song || !this.active) return;
+    this.carry = mutedTracks(this.active);
+    this.active.stop(0.12);
     this.start(this.song, { fadeIn: 0.08, from: seconds });
   }
 
@@ -185,12 +186,12 @@ export class Jukebox {
   }
 
   /** Play a short song once on top of whatever is playing (victory jingles, fanfares). Its samples are rendered on the spot. */
-  playOnce(song: Song): Performance {
+  playOnce(song: Song): Playback {
     const ctx = this.context;
     prepareSongSync(ctx, song);
-    const perf = new Performance(ctx, this.volumeNode!, song, { at: ctx.currentTime + 0.03, loops: 1 });
-    perf.schedule(perf.startTime + perf.duration);
-    return perf;
+    const active = new Playback(ctx, this.volumeNode!, song, { at: ctx.currentTime + 0.03, loops: 1 });
+    active.schedule(active.startTime + active.duration);
+    return active;
   }
 
   /**
@@ -227,7 +228,7 @@ export class Jukebox {
     return this.context.resume();
   }
 
-  private async begin(source: SongSource, token: number, options: PlayOptions): Promise<Performance | null> {
+  private async begin(source: SongSource, token: number, options: PlayOptions): Promise<Playback | null> {
     try {
       const ctx = this.context;
       const song = await this.load(source);
@@ -241,14 +242,14 @@ export class Jukebox {
     }
   }
 
-  private start(song: Song, options: { fadeIn: number; from?: number }): Performance {
+  private start(song: Song, options: { fadeIn: number; from?: number }): Playback {
     const ctx = this.context;
-    const perf = new Performance(ctx, this.volumeNode!, song, { ...options, loops: this.loops, at: ctx.currentTime + 0.08 });
-    for (const t of perf.tracks) if (this.carry.has(`${t.section}|${t.name}`)) t.muted = true;
+    const active = new Playback(ctx, this.volumeNode!, song, { ...options, loops: this.loops, at: ctx.currentTime + 0.08 });
+    for (const t of active.tracks) if (this.carry.has(`${t.section}|${t.name}`)) t.muted = true;
     this.carry = new Set();
-    this.perf = perf;
+    this.active = active;
     this.runClock();
-    return perf;
+    return active;
   }
 
   /** Fade out what is playing and cancel anything still loading; the current song is remembered (for resume and seek) */
@@ -256,8 +257,8 @@ export class Jukebox {
     this.token++;
     this.pending = null;
     this.pausedAt = null;
-    this.perf?.stop(fade);
-    this.perf = null;
+    this.active?.stop(fade);
+    this.active = null;
   }
 
   private resolve(song: string | SongSource): SongSource {
@@ -296,13 +297,13 @@ export class Jukebox {
   private runClock(): void {
     if (this.timer !== null) return;
     this.timer = setInterval(() => {
-      if (!this.perf || !this.ctx) return;
+      if (!this.active || !this.ctx) return;
       const hidden = typeof document !== 'undefined' && document.hidden;
-      this.perf.schedule(this.ctx.currentTime + (hidden ? AHEAD_HIDDEN : AHEAD));
+      this.active.schedule(this.ctx.currentTime + (hidden ? AHEAD_HIDDEN : AHEAD));
     }, 25);
   }
 }
 
-function mutedTracks(perf: Performance): Set<string> {
-  return new Set(perf.tracks.filter((t) => t.muted).map((t) => `${t.section}|${t.name}`));
+function mutedTracks(active: Playback): Set<string> {
+  return new Set(active.tracks.filter((t) => t.muted).map((t) => `${t.section}|${t.name}`));
 }

@@ -15,7 +15,6 @@ const R = (n: number) => rest(n);
 /** Merge adjacent identical chords into one long chord */
 const slow = (h: string) => h.split('|').map((s) => s.trim()).map((c, i, a) => (i > 0 && c === a[i - 1] ? '%' : c)).join(' | ');
 const roots = (p: Chord[], lo: number, v = 0.78): Part => ({ notes: p.map((c) => ({ time: c.time, duration: c.duration, pitches: [lo + ((c.bass - (lo % 12) + 12) % 12)], velocity: v })), duration: chordsDuration(p) });
-const E = '................';
 
 // ── Harmony (8 bars per section)
 const hA = 'Cm | F | Cm | Gm | Cm | F | Bb | Cm';

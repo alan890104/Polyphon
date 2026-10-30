@@ -8,7 +8,6 @@ const VERSE = 'Bm | Gmaj7 | Em7 | F#7sus4 F#7 | Bm | Dmaj7/A | Gmaj7 | Em7 F#7';
 const CHORUS = 'Gmaj7 | A | F#m7 | Bm | Em7 | A | Dmaj7 | F#7sus4 F#7';
 
 const intro = chords(INTRO);
-const verse = chords(VERSE);
 const chorus = chords(CHORUS);
 const song = chords(`${VERSE} | ${CHORUS} | ${CHORUS}`);
 

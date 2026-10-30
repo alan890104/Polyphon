@@ -172,7 +172,7 @@ music.playOnce(victoryJingle);            // layered on top
 music.stop();
 ```
 
-`play` resolves with the `Performance` once the song starts, or `null` if another song was asked for first. A `Performance` reports `position()`, `duration`, `introDuration` and `loopDuration`; its `tracks` can be muted one by one (`track.muted = true`) and expose an `output` node for meters; `finished` resolves when a song with an end has played. Pass `{ loops: n }` to `play` to end after n passes.
+`play` resolves with the `Playback` once the song starts, or `null` if another song was asked for first (`music.playback` is the current one). A `Playback` reports `position()`, `duration`, `introDuration` and `loopDuration`; its `tracks` can be muted one by one (`track.muted = true`) and expose an `output` node for meters; `finished` resolves when a song with an end has played. Pass `{ loops: n }` to `play` to end after n passes.
 
 The Jukebox creates its `AudioContext` on first use and starts it on the first click, tap or key press. To share a context with your sound effects, pass `context` and `destination`.
 
