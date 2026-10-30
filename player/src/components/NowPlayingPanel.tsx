@@ -7,13 +7,19 @@ import { usePlayer, usePlayerState } from '../usePlayer.ts';
 import { DiscPlayer } from './DiscPlayer.tsx';
 import { DownloadButton } from './DownloadButton.tsx';
 import { IconButton } from './IconButton.tsx';
-import { CloseIcon } from './Icons.tsx';
+import { CloseIcon, VisualizerIcon } from './Icons.tsx';
 import { Spinner } from './Indicators.tsx';
 import { Mixer } from './Mixer.tsx';
 import { ProgressBar } from './ProgressBar.tsx';
 import { Transport } from './Transport.tsx';
 
-export function NowPlayingPanel({ onClose }: { onClose: () => void }) {
+interface NowPlayingPanelProps {
+  onClose: () => void;
+  /** Open the full-screen visualizer */
+  onVisualizer: () => void;
+}
+
+export function NowPlayingPanel({ onClose, onVisualizer }: NowPlayingPanelProps) {
   const { analyser } = usePlayer();
   const song = usePlayerState((s) => s.song);
   const playlist = usePlayerState((s) => s.playlist);
@@ -25,9 +31,14 @@ export function NowPlayingPanel({ onClose }: { onClose: () => void }) {
     <aside className="panel" aria-label="Now playing">
       <header className="panel__header">
         <h2 className="label">Now playing</h2>
-        <IconButton label="Close Now playing" onClick={onClose}>
-          <CloseIcon />
-        </IconButton>
+        <div className="panel__actions">
+          <IconButton label="Visualizer (F)" onClick={onVisualizer}>
+            <VisualizerIcon />
+          </IconButton>
+          <IconButton label="Close Now playing" onClick={onClose}>
+            <CloseIcon />
+          </IconButton>
+        </div>
       </header>
 
       <div className="panel__disc">

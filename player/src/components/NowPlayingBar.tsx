@@ -4,7 +4,7 @@
 import { usePlayerState } from '../usePlayer.ts';
 import { Cover } from './Cover.tsx';
 import { IconButton } from './IconButton.tsx';
-import { DiscIcon } from './Icons.tsx';
+import { DiscIcon, VisualizerIcon } from './Icons.tsx';
 import { ProgressBar, ProgressLine } from './ProgressBar.tsx';
 import { Transport } from './Transport.tsx';
 import { VolumeControl } from './VolumeControl.tsx';
@@ -12,9 +12,11 @@ import { VolumeControl } from './VolumeControl.tsx';
 interface NowPlayingBarProps {
   panelOpen: boolean;
   onTogglePanel: () => void;
+  /** Open the full-screen visualizer */
+  onVisualizer: () => void;
 }
 
-export function NowPlayingBar({ panelOpen, onTogglePanel }: NowPlayingBarProps) {
+export function NowPlayingBar({ panelOpen, onTogglePanel, onVisualizer }: NowPlayingBarProps) {
   const song = usePlayerState((s) => s.song);
   const playlist = usePlayerState((s) => s.playlist);
   const error = usePlayerState((s) => s.error);
@@ -46,6 +48,9 @@ export function NowPlayingBar({ panelOpen, onTogglePanel }: NowPlayingBarProps) 
         <ProgressBar />
       </div>
       <div className="bar__side">
+        <IconButton label="Visualizer (F)" disabled={!song} onClick={onVisualizer}>
+          <VisualizerIcon />
+        </IconButton>
         <IconButton className="toggle-button" label="Now playing" pressed={panelOpen} disabled={!song} onClick={onTogglePanel}>
           <DiscIcon />
         </IconButton>

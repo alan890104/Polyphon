@@ -109,6 +109,16 @@ export const DiscIcon = () => (
   </Line>
 );
 
+/** The immersive visualizer: a disc radiating its spectrum */
+export const VisualizerIcon = () => (
+  <Line>
+    <circle cx="10" cy="10" r="3.25" />
+    <circle cx="10" cy="10" r="0.4" />
+    <path d="M10 4.25v-2.5M10 15.75v2.5M4.25 10h-2.5M15.75 10h2.5" />
+    <path d="m14.07 5.93 1.06-1.06M14.07 14.07l1.06 1.06M5.93 5.93 4.87 4.87M5.93 14.07l-1.06 1.06" />
+  </Line>
+);
+
 export const CloseIcon = () => (
   <Line>
     <path d="m5.5 5.5 9 9m0-9-9 9" />

@@ -143,6 +143,14 @@ button:disabled {
   background: var(--ink);
 }
 
+/* Shown for the moment the visualizer's code takes to load */
+.immersive-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--ink);
+}
+
 /* ───────────── Layout ───────────── */
 
 .app {
@@ -835,6 +843,11 @@ button.now:hover {
   align-items: center;
   justify-content: space-between;
   margin-right: -8px;
+}
+
+.panel__actions {
+  display: flex;
+  gap: 4px;
 }
 
 .panel__disc {
