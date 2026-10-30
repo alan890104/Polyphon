@@ -1,0 +1,267 @@
+# Polyphon
+
+**用程式碼寫音樂，在瀏覽器裡演奏。** 一套記譜語法、一支 103 種樂器的合成樂團，加上一個排程器，全部建立在 Web Audio API 上。沒有任何音檔：每個音都是在瀏覽器裡算出來的。
+
+[English](README.md)
+
+```ts
+import { Jukebox, bassline, chords, defineSong, melody, pad, rhythm } from 'polyphon';
+
+const harmony = chords('C | Am | F | G');
+
+const theme = defineSong({
+  title: 'Morning Market',
+  bpm: 112,
+  tracks: [
+    { instrument: 'marimba', part: 'E5:2 G5:2 C6:4 B5:2 G5:2 E5:4 | A5:4 G5:2 E5:2 C5:8 | F5:2 A5:2 C6:4 A5:2 F5:2 D5:4 | G5:6 F5:2 E5:4 D5:4 |' },
+    { instrument: 'strPad', part: pad(harmony, { center: 'C4', velocity: 0.4 }), gain: 0.6 },
+    { instrument: 'pizzBass', part: bassline(harmony, 'x...x.x.x...x.x.', '1 5 8 5') },
+    { instrument: 'kick', part: rhythm('X.......x.......') },
+  ],
+});
+
+const music = new Jukebox();
+music.play(theme); // 瀏覽器要求使用者互動時，會在第一次點擊或按鍵時開始
+```
+
+Polyphon 源自生物對戰 RPG [Eldor（艾爾多）](https://github.com/alan890104/eldor) 的配樂引擎，遊戲的 46 首配樂都收在這裡當範例。
+
+## 它能做什麼
+
+- **讀起來像樂譜的記譜法。** 旋律是短字串（`'E5:4 D5:2 C5:2 |'`），鼓是格子（`'X...x...'`），和聲是和弦記號（`'Am7 | D7 | Gmaj7'`）。墊音、琶音、低音線、刷弦都從和弦進行長出來。所有東西都是純資料，你也可以自己產生音符。
+- **沒有取樣的樂團。** 鋼琴和撥弦用物理模型，弓弦樂一位一位演奏者分開算，管樂、銅管、合唱、合成器即時合成。取樣型樂器的每個音只算一次並快取，播放時幾乎不耗 CPU。
+- **給遊戲用的點唱機。** 換曲淡入淡出、預先準備、暫停／繼續／跳轉、在音效下壓低音樂、前奏接循環，並自動處理瀏覽器的音訊解鎖。
+- **匯入與匯出。** `songFromMidi` 讀標準 MIDI 檔；`renderSong` 加 `encodeWav` 把任何曲子輸出成 WAV。
+- **音樂鑑賞室。** `npm run dev` 打開像 Spotify 的播放器，收錄所有範例，附分軌混音台和視覺化。
+
+## 安裝
+
+```bash
+npm install github:alan890104/polyphon
+```
+
+內含 TypeScript 型別，沒有任何執行期相依套件。
+
+## 寫音樂
+
+時間以 **step** 計：一個 step 是一個十六分音符，四分音符是 4，4/4 拍一小節是 16。
+
+### 旋律
+
+```ts
+melody('E5:4 D5:2 C5:2 | B4:8 r:8 |')
+```
+
+| 寫法 | 意思 |
+| --- | --- |
+| `E5:4` | E5，長 4 個 step（四分音符） |
+| `E5 D5` | 省略長度就沿用上一個 |
+| `r:8` 或 `.` | 休止 |
+| `R` | 整小節休止 |
+| `\|` | 小節線：會檢查每小節長度，寫錯會直接報出是第幾小節 |
+| `C4+E4+G4:16` | 和弦 |
+| `!E5` / `?E5` | 重音／輕音 |
+| `E5:4>` | 滑音到下一個音（支援滑音的樂器） |
+| `E5:4/3` | 分數長度：三連音八分音符是 `4/3` |
+| `(E5:2 D5:2)*4` | 重複一組 |
+
+其他拍號傳入拍號即可：`melody('G4:6 A4:2 B4:4 |', '3/4')`。旋律字串也可以直接當軌道的 `part`，會用曲子的拍號解讀。
+
+### 節奏
+
+```ts
+rhythm('X...x...X..xx...')             // X 重音、x 一般、o 輕、. 或 - 休止
+rhythm('x.x.x.x.', { pitch: 'G2' })    // 每一下都打同一個音高
+rhythm('x.x.', { step: 2 })            // 每個字元 2 個 step
+```
+
+### 和聲
+
+```ts
+const harmony = chords('Am | F | C G | E7');   // 同一小節的和弦平分時間
+chords('Dm:12 A7:4 | %');                      // 明確寫長度；% 表示上一個和弦再延一小節
+```
+
+支援的和弦：大三、`m`、`dim`、`aug`、`sus2`、`sus4`、`5`、`6`、`m6`、`7`、`maj7`、`m7`、`mmaj7`、`m7b5`、`dim7`、`7sus4`、`add9`、`madd9`、`9`、`maj9`、`m9`、`7b9`、`7#9`、`m11`、`11`、`maj7s11`、`6/9`、`q` 與 `q4`（四度疊置），以及斜線低音（`C/E`）。
+
+從和弦進行產生聲部：
+
+| 函式 | 產生 |
+| --- | --- |
+| `pad(harmony, { center, size, velocity, gap })` | 長音和弦，聲部會挑移動最少的轉位 |
+| `arpeggio(harmony, '0 1 2 1', { step, center, size, velocity, accent })` | 分解和弦：數字從下往上選和弦音（超過就升八度），`.` 休止，`-` 延長 |
+| `bassline(harmony, 'x...x.x.', '1 5 8 5', { register, velocity })` | 低音線：節奏每小節循環，級數依序使用（`1 3 5 8 -8 b7 7 2 4 6 b2 -5 -4`） |
+| `roots(harmony, { register, fifth, velocity })` | 每個和弦一個長低音，可疊空五度 |
+| `strum(harmony, 'x.x-', { center, size, spread, velocity })` | 刷弦 |
+
+`center` 和 `register` 可以寫音名（`'C4'`）或 MIDI 數字。
+
+### 組合聲部
+
+| 函式 | 作用 |
+| --- | --- |
+| `sequence(a, b, ...)` | 一段接一段（字串視為 4/4 旋律） |
+| `stack(a, b, ...)` | 同時發聲 |
+| `repeat(part, n)` | 連續 n 次 |
+| `rest(bars, meter?)` | 休止幾小節 |
+| `transpose(part, semitones)` | 移調 |
+| `mapPitch(part, fn)` | 改寫音高（例如 `remapToMode` 換調式） |
+| `scaleVelocity(part, factor)` | 整體變大聲或變小聲 |
+| `slice(part, from, to)` | 切出一段 step 範圍 |
+| `pedal(part, changes)` | 延音踏板：音會一直響到下一次換踩（每 n 個 step、指定的 step 清單，或跟著和弦進行換），或同一個鍵再被敲下 |
+
+樂理工具：`midi('C#4')`、`frequency('A4')`、`noteName(61)`、`parseChord('F#m7b5')`、`voiceChord`、`scaleDegree('D4', 'dorian', 2)`、`remapToMode`、`romanChord('iv7', 'D4', 'aeolian')`，以及 `MODES`（從 ionian 到 locrian、和聲與旋律小調、弗里吉亞屬調、匈牙利小調、雙和聲、五聲音階、全音、八聲音階等）。
+
+### 曲子
+
+```ts
+defineSong({
+  title: 'Night Waltz',
+  description: 'A 小調，3/4',
+  bpm: 84,
+  meter: '3/4',              // 預設 '4/4'
+  swing: 0,                  // 八分音符搖擺 0-0.5；十六分音符用 swing16
+  reverb: { size: 2.6, damp: 0.5, preDelay: 0.02, early: 0.3, mix: 1 },
+  delay: { steps: 3, feedback: 0.3, tone: 2800, mix: 0.8 },  // 跟速度同步的左右乒乓延遲
+  gain: 1,
+  master: { warm: 2, cut: 1, trim: -1 },  // 母帶等化（dB）
+  intro: [/* 只播一次的軌道 */],
+  tracks: [/* 循環的軌道 */],
+  loop: true,                // false：只播一次（短曲、號角）
+});
+```
+
+一個段落的長度等於最長的軌道（補足整小節），較短的軌道會重複填滿，除非設 `repeat: false`。
+
+軌道欄位：
+
+| 欄位 | 預設 | |
+| --- | --- | --- |
+| `instrument` | | 內建樂器名稱（編輯器會自動補全）或自己註冊的名稱 |
+| `part` | | 一個 part，或一段旋律字串 |
+| `name` | 樂器名稱 | 混音台上顯示的名字 |
+| `gain` | 1 | 音量 |
+| `pan` | 0 | -1 左到 1 右 |
+| `reverb` | 0.25 | 送到殘響的量 |
+| `delay` | 0 | 送到延遲的量 |
+| `transpose` | 0 | 半音 |
+| `humanize` | 0.008 秒（鼓 0.003） | 時間上的人味 |
+| `params` | | 樂器參數：`attack`、`release`、`bright`、`glide`、`ring`、`tune` 等 |
+| `repeat` | true | 重複填滿段落 |
+
+## 播放
+
+```ts
+const music = new Jukebox({
+  songs: {                                       // 可選：用名稱播放的曲目
+    town: () => import('./music/town.ts'),       // 第一次用到時才載入、準備
+    battle: battleSong,
+  },
+  volume: 0.8,
+});
+
+music.play('town');                       // 從正在播的曲子淡入淡出切過來
+music.preload('battle');                  // 先把樣本算好
+await music.play('battle', { fadeOut: 0.5, fadeIn: 0.05 });
+music.duck(-10);                          // 大音效時壓低 10 dB，0.35 秒後回來
+music.duck(-30, { attack: 0.12, hold: 4, release: 0.6 });
+music.pause();
+music.resume();
+music.seek(30);
+music.playOnce(victoryJingle);            // 疊在上面播
+music.stop();
+```
+
+`play` 在曲子開始時回傳 `Performance`；如果在準備好之前又要求了別首，則回傳 `null`。`Performance` 提供 `position()`、`duration`、`introDuration`、`loopDuration`；它的 `tracks` 可以逐軌靜音（`track.muted = true`），並提供 `output` 節點接音量表；有結尾的曲子播完時 `finished` 會 resolve。`play` 傳入 `{ loops: n }` 可以在播完 n 輪後結束。
+
+Jukebox 會在第一次使用時建立 `AudioContext`，並在第一次點擊、觸控或按鍵時啟動。要跟音效共用同一個 context，傳入 `context` 和 `destination` 即可。
+
+## 樂器
+
+| 類別 | 樂器 |
+| --- | --- |
+| 鍵盤 | `piano` `softPiano` `epiano` `revPiano` `organ` `organFull` `accordion` |
+| 撥弦 | `harp` `nylon` `steel` `lute` `dulcimer` `pizz` `pizzBass` |
+| 敲擊旋律與鐘 | `kalimba` `marimba` `vibes` `glock` `celesta` `musicbox` `bell` `chime` `steelpan` |
+| 弓弦 | `strings` `strPad` `violin` `cello` `celli` `contrabass` `fiddle` `morin` `spicc` |
+| 木管 | `flute` `panflute` `ocarina` `whistle` `clarinet` `oboe` `bassoon` |
+| 銅管 | `horn` `horns` `trumpet` `trumpets` `trombone` `tuba` `brassStab` |
+| 人聲 | `choir` `choirOo` `choirO` `menChoir` `chant` `soprano` `throat` |
+| 墊音與持續音 | `warmPad` `glassPad` `darkPad` `airPad` `glass` `drone` |
+| 低音與合成器 | `bass` `synthBass` `sub` `distBass` `synthLead` `powerGtr` `muteGtr` |
+| 鼓 | `kick` `boom` `snare` `field` `rim` `clap` `hat` `ohat` `ride` `crash` `swell` `tom` `taiko` `timpani` `frame` `darbuka` |
+| 打擊 | `shaker` `tamb` `woodblock` `clave` `anvil` `gong` `chain` `snap` `brush` `drip` `thunder` `thunderclap` |
+| 環境音與效果 | `wind` `sea` `fire` `crickets` `rain` `void` `cave` `birds` `riser` |
+
+它們是怎麼做的：
+
+- **鋼琴**：每根弦（每個音一到三根，彼此微微走音）都用 modal synthesis 計算，包含非諧和性、擴展調律、兩段式衰減、隨頻率增加的弦損耗、響板、擊槌與制音器的聲音，以及隨力度變化的明亮度。
+- **撥弦**：Karplus-Strong，用 allpass 精準調音、comb filter 模擬撥弦位置；低音撥弦用加法合成。
+- **弓弦**：聲部裡每位演奏者分開算，各自有音準、顫音、運弓點和弓毛雜音，再通過有幾十個共鳴的琴身；持續段可以無縫循環。
+- **敲擊旋律與鐘**：依實測分音比例做 modal synthesis（教堂鐘有 hum、prime、tierce、quint、nominal）。
+- **管樂、銅管與人聲**：即時振盪器，搭配諧波表、氣音、共振峰（合唱真的在唱母音）和每個音各自的顫音。
+- **鼓**：掃頻正弦、濾波雜訊和 808 式金屬音，每種鼓有隨機變體，連打不會像機關槍。
+- **空間**：每首歌有自己程式產生的捲積殘響。
+
+自訂樂器：
+
+```ts
+registerInstrument('beep', {
+  play({ context, destination, time, duration, frequency, velocity }) {
+    const osc = new OscillatorNode(context, { type: 'square', frequency });
+    const amp = new GainNode(context, { gain: velocity * 0.2 });
+    osc.connect(amp).connect(destination);
+    osc.start(time);
+    osc.stop(time + duration);
+  },
+});
+
+registerInstrument('myBell', {
+  render: (sampleRate, midi) => renderBell(sampleRate, midi), // 回傳 Float32Array，每個音高只算一次
+  sustain: 'ring',
+});
+```
+
+## MIDI 與音檔
+
+```ts
+const song = songFromMidi(await file.arrayBuffer(), { title: file.name });
+music.play(song);
+```
+
+`songFromMidi` 會依實際時間保留速度變化，並讀取拍號、延音踏板、音量與聲像。General MIDI 音色會對應到樂團裡的樂器，第 10 頻道對應到鼓組。
+
+```ts
+const buffer = await renderSong(song, { loops: 1 });  // OfflineAudioContext，比即時快
+const wav = encodeWav(buffer);                        // 16-bit PCM
+```
+
+## 音樂鑑賞室
+
+```bash
+npm install
+npm run dev
+```
+
+播放器收錄所有範例（Eldor 的配樂、貝多芬《月光》和幾首短曲），有可以靜音或獨奏各軌的混音台、視覺化、WAV 下載和 MIDI 匯入。匯入的 MIDI 只留在你的瀏覽器裡。
+
+## 開發
+
+```bash
+npm test             # 記譜、樂理、MIDI 匯入，以及每一首範例曲（Node，不需要瀏覽器）
+npm run typecheck
+npm run build        # 函式庫，輸出到 dist/
+npm run build:player # 鑑賞室，輸出到 player/dist/
+```
+
+Node 22.18 以上可以直接執行 TypeScript 原始碼。
+
+## 致謝
+
+- Eldor 的配樂（`examples/eldor`）是為 [Eldor](https://github.com/alan890104/eldor) 而寫。
+- 《月光》範例的音高對照 [Mutopia Project](https://www.mutopiaproject.org) 的版本（樂曲本身是公有領域；該版本以 CC BY-SA 2.5 授權）。
+- 鋼琴的弦損耗模型參考 A. Chaigne 與 A. Askenfelt 的 *Numerical simulations of piano strings*（1994）。
+
+## 授權
+
+MIT

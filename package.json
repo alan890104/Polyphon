@@ -36,6 +36,7 @@
   "scripts": {
     "dev": "vite --config player/vite.config.ts",
     "build": "tsc -p tsconfig.build.json",
+    "prepare": "npm run build",
     "build:player": "vite build --config player/vite.config.ts",
     "preview": "vite preview --config player/vite.config.ts",
     "test": "node --conditions=polyphon-source --test \"test/**/*.test.ts\"",
