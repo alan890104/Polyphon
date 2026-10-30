@@ -1,0 +1,55 @@
+{
+  "name": "polyphon",
+  "version": "0.1.0",
+  "description": "Music for the browser, written as code: a score notation, a synthesized orchestra and a scheduler on top of the Web Audio API. No audio files.",
+  "license": "MIT",
+  "author": "Yu Lun Hsu",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alan890104/polyphon.git"
+  },
+  "keywords": [
+    "music",
+    "web-audio",
+    "synthesizer",
+    "game-audio",
+    "soundtrack",
+    "sequencer",
+    "notation"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "polyphon-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "vite --config player/vite.config.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "build:player": "vite build --config player/vite.config.ts",
+    "preview": "vite preview --config player/vite.config.ts",
+    "test": "node --conditions=polyphon-source --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit -p . && tsc --noEmit -p player",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1"
+  }
+}
