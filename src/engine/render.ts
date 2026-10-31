@@ -1,7 +1,7 @@
 // Offline rendering: play a song into a buffer as fast as the machine allows (for exporting audio files, tests and measurements).
 
 import { songDuration, type Song } from '../song.ts';
-import { createOutputStage } from './output.ts';
+import { createOutputStage, mastersItself } from './output.ts';
 import { Playback } from './playback.ts';
 import { prepareSongSync } from './prepare.ts';
 
@@ -21,7 +21,8 @@ export async function renderSong(song: Song, { duration, loops = 1, sampleRate =
   const length = duration ?? intro + loops * loop + 3;
   const ctx = new OfflineAudioContext(2, Math.ceil(length * sampleRate), sampleRate);
   prepareSongSync(ctx, song);
-  const playback = new Playback(ctx, createOutputStage(ctx, ctx.destination), song, { at: 0.05, loops });
+  const out = mastersItself(song) ? ctx.destination : createOutputStage(ctx, ctx.destination);
+  const playback = new Playback(ctx, out, song, { at: 0.05, loops });
   playback.schedule(length);
   return ctx.startRendering();
 }

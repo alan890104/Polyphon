@@ -4,9 +4,10 @@
 import { getInstrument } from '../instruments/registry.ts';
 import { playNote } from '../instruments/play.ts';
 import { stepsPerBar } from '../notation/part.ts';
-import { DEFAULT_REVERB, type Song, type Track } from '../song.ts';
+import { DEFAULT_REVERB, trackName, type Song, type Track } from '../song.ts';
+import { pump, sweep } from './automation.ts';
 import { compileSection, type CompiledSection, type ScheduledNote } from './compile.ts';
-import { createMixer } from './mixer.ts';
+import { createMixer, type Strip } from './mixer.ts';
 
 export interface PlaybackOptions {
   /** When to start, in context seconds (default: 80 ms from now) */
@@ -24,7 +25,7 @@ export interface PlaybackTrack {
   readonly name: string;
   readonly instrument: string;
   readonly section: 'intro' | 'loop';
-  /** The track's signal after its level, before pan and effects (connect an AnalyserNode here for a meter) */
+  /** The track's signal after its level, filters and ducking, before pan and effects (connect an AnalyserNode here for a meter) */
   readonly output: AudioNode;
   muted: boolean;
 }
@@ -61,7 +62,7 @@ export class Playback {
   readonly finished: Promise<void>;
 
   private readonly sections: [CompiledSection, CompiledSection];
-  private readonly inputs: [GainNode[], GainNode[]];
+  private readonly strips: [Strip[], Strip[]];
   private readonly step: number;
   private readonly loops: number;
   private sec = INTRO;
@@ -79,7 +80,7 @@ export class Playback {
     const meter = song.meter ?? 16;
     this.step = 60 / song.bpm / 4;
     this.loops = Math.max(1, options.loops ?? (song.loop === false ? 1 : Infinity));
-    this.sections = [song.intro?.length ? compileSection(song.intro, meter) : { duration: 0, notes: [] }, compileSection(song.tracks, meter)];
+    this.sections = [song.intro?.length ? compileSection(song.intro, meter) : { duration: 0, notes: [], ducks: [] }, compileSection(song.tracks, meter)];
     this.introDuration = this.sections[INTRO].duration * this.step;
     this.loopDuration = this.sections[BODY].duration * this.step;
     this.duration = this.introDuration + this.loops * this.loopDuration;
@@ -87,8 +88,8 @@ export class Playback {
 
     const mixer = createMixer(context, song, this.step, destination);
     this.output = mixer.output;
-    this.inputs = mixer.inputs;
-    this.tracks = [...trackHandles(song.intro ?? [], mixer.inputs[INTRO], 'intro'), ...trackHandles(song.tracks, mixer.inputs[BODY], 'loop')];
+    this.strips = mixer.strips;
+    this.tracks = [...trackHandles(song.intro ?? [], mixer.strips[INTRO], 'intro'), ...trackHandles(song.tracks, mixer.strips[BODY], 'loop')];
 
     const at = options.at ?? context.currentTime + 0.08;
     const fadeIn = options.fadeIn ?? 0;
@@ -100,6 +101,7 @@ export class Playback {
     const from = Math.min(Math.max(0, options.from ?? 0), this.duration - this.step);
     this.secStart = at;
     if (from > 0) this.seek(from / this.step, at);
+    else this.sweep(0);
     this.startTime = at - from;
   }
 
@@ -123,6 +125,7 @@ export class Playback {
         const at = this.timeOf(n.time);
         if (at >= until) return;
         this.fire(this.sec, n, at);
+        this.duckUnder(n.track, at);
         this.idx++;
       }
       const end = this.secStart + sec.duration * this.step;
@@ -135,9 +138,11 @@ export class Playback {
         this.passes++;
       }
       // Next section: after the intro comes the body; the body repeats
+      const again = this.sec === BODY;
       this.secStart = end;
       this.sec = BODY;
       this.idx = 0;
+      this.sweep(0, again);
     }
   }
 
@@ -189,7 +194,7 @@ export class Playback {
     pitches.forEach((m, k) => {
       playNote(track.instrument, {
         ctx: this.context,
-        out: this.inputs[section][n.track],
+        out: this.strips[section][n.track].input,
         t: t + (n.strum ? k * n.strum : 0),
         dur,
         m: m ? m + transpose : 0,
@@ -211,9 +216,12 @@ export class Playback {
       this.sec = BODY;
     }
     this.secStart = at - offset * this.step;
-    const notes = this.sections[this.sec].notes;
+    const { notes, ducks } = this.sections[this.sec];
+    /** The last hit of each track that others duck under */
+    const hits = new Map<number, number>();
     while (this.idx < notes.length && notes[this.idx].time < offset - 1e-9) {
       const n = notes[this.idx++];
+      if (ducks[n.track].length) hits.set(n.track, n.time);
       const left = n.time + n.duration - offset;
       if (left > 0.5 && sustains(this.trackOf(this.sec, n.track))) {
         const into = offset - n.time;
@@ -221,6 +229,20 @@ export class Playback {
         this.fire(this.sec, { ...n, time: offset, duration: left, bends }, at);
       }
     }
+    // Pick up the pumping and the filter sweeps where they would be by now
+    for (const [track, time] of hits) this.duckUnder(track, this.timeOf(time), at);
+    this.sweep(offset);
+  }
+
+  /** A track's hit at `hit` (context seconds): the tracks that duck under it pump (picked up at `from` when the hit is past) */
+  private duckUnder(track: number, hit: number, from = hit): void {
+    for (const k of this.sections[this.sec].ducks[track]) pump(this.strips[this.sec][k].pump!, hit, from);
+  }
+
+  /** A pass of the current section begins (`from` steps in; `again` when it follows a pass of the same section): send its filters along their sweeps */
+  private sweep(from: number, again = false): void {
+    const { duration } = this.sections[this.sec];
+    for (const strip of this.strips[this.sec]) for (const s of strip.sweeps) sweep(s.cutoff, s.points, this.secStart, from, duration, this.step, again);
   }
 
   private trackOf(section: number, index: number): Track {
@@ -259,15 +281,15 @@ function sustains(track: Track): boolean {
   return def.kind === 'live' || !!def.bow || !!def.loop;
 }
 
-function trackHandles(tracks: Track[], inputs: GainNode[], section: 'intro' | 'loop'): PlaybackTrack[] {
+function trackHandles(tracks: Track[], strips: Strip[], section: 'intro' | 'loop'): PlaybackTrack[] {
   return tracks.map((track, i) => {
-    const input = inputs[i];
+    const { input, output } = strips[i];
     let muted = false;
     return {
-      name: track.name ?? track.instrument,
+      name: trackName(track),
       instrument: track.instrument,
       section,
-      output: input,
+      output,
       get muted() {
         return muted;
       },

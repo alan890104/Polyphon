@@ -1,7 +1,7 @@
 // Polyphon: music for the browser, written as code.
 //
 //   Write    melody, rhythm, chords, pad, arpeggio, bassline, roots, strum, and the part transforms
-//   Declare  defineSong: tempo, room, tracks (instrument + part)
+//   Declare  defineSong: tempo, room, tracks (instrument + part), mixing and mastering
 //   Play     Jukebox: crossfades, preloading, ducking, pause and seek
 //   Export   renderSong + encodeWav
 //   Import   songFromMidi
@@ -13,7 +13,7 @@ export { sequence, stack, repeat, rest, transpose, mapPitch, scaleVelocity, slic
 export { stepsPerBar, VELOCITY, type Note, type Part, type Meter } from './notation/part.ts';
 export { midi, frequency, noteName, parseChord, voiceChord, scaleDegree, remapToMode, romanChord, MODES, type Pitch, type Mode, type ChordInfo, type VoicingOptions } from './theory.ts';
 
-export { defineSong, songDuration, DEFAULT_REVERB, type Song, type Track, type Reverb, type Delay, type MasterEq } from './song.ts';
+export { defineSong, songDuration, DEFAULT_REVERB, type Song, type Track, type Reverb, type Delay, type Master, type Duck, type Sweep } from './song.ts';
 
 export { Jukebox, type JukeboxOptions, type JukeboxState, type PlayOptions, type DuckOptions, type SongSource } from './engine/jukebox.ts';
 export { Playback, type PlaybackOptions, type PlaybackTrack, type SongPosition } from './engine/playback.ts';

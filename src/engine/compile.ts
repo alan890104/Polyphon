@@ -4,7 +4,7 @@ import type { SampledInstrument } from '../instruments/definition.ts';
 import { getInstrument } from '../instruments/registry.ts';
 import { bowLayers, type SampleRequest } from '../instruments/samples.ts';
 import type { Meter } from '../notation/part.ts';
-import { sectionSteps, trackPart, type Song } from '../song.ts';
+import { sectionSteps, trackName, trackPart, type Song, type Track } from '../song.ts';
 
 /** A note ready to schedule */
 export interface ScheduledNote {
@@ -24,6 +24,8 @@ export interface CompiledSection {
   /** Length in steps (whole bars) */
   duration: number;
   notes: ScheduledNote[];
+  /** For each track, the tracks that duck under its hits */
+  ducks: number[][];
 }
 
 /** Compile one section into sorted notes; shorter tracks repeat to fill the whole section */
@@ -60,7 +62,20 @@ export function compileSection(tracks: Song['tracks'], meter: Meter): CompiledSe
     }
   });
   notes.sort((a, b) => a.time - b.time);
-  return { duration, notes };
+  return { duration, notes, ducks: duckLists(tracks) };
+}
+
+/** For each track, the tracks that duck under its hits (a pad with `duck: 'Kick'` is on the kick's list) */
+function duckLists(tracks: Track[]): number[][] {
+  const ducks = tracks.map((): number[] => []);
+  tracks.forEach((track, i) => {
+    if (!track.duck) return;
+    const by = typeof track.duck === 'string' ? track.duck : track.duck.by;
+    const triggers = tracks.flatMap((t, k) => (k !== i && trackName(t) === by ? [k] : []));
+    if (!triggers.length) throw new Error(`"${trackName(track)}" ducks under "${by}", but no other track in its section is called that`);
+    for (const k of triggers) ducks[k].push(i);
+  });
+  return ducks;
 }
 
 /** Every sample a song will play, so they can be rendered before it starts */

@@ -23,8 +23,8 @@ export interface Song {
   delay?: Delay;
   /** Level of the whole song (linear, default 1) */
   gain?: number;
-  /** Mastering EQ */
-  master?: MasterEq;
+  /** Mastering: EQ, glue compression and, for loud genres, a limiter */
+  master?: Master;
   /** Plays once before the tracks start looping */
   intro?: Track[];
   /** The body of the song; loops unless `loop` is false */
@@ -47,6 +47,12 @@ export interface Track {
   reverb?: number;
   /** How much goes to the delay, 0-1 (default 0) */
   delay?: number;
+  /** Duck under another track's hits, the pumping of house and EDM: that track's name (usually 'Kick'), or how deep and how long too */
+  duck?: string | Duck;
+  /** Low-pass filter: a cutoff in Hz, or a sweep */
+  lowpass?: number | Sweep;
+  /** High-pass filter: a cutoff in Hz, or a sweep */
+  highpass?: number | Sweep;
   /** Semitones */
   transpose?: number;
   /** Timing looseness: the most a note may land early or late, in seconds (default 0.008, drums 0.003) */
@@ -73,11 +79,33 @@ export interface Delay {
   mix?: number;
 }
 
-/** Mastering EQ: warm adds body at 150 Hz (dB), cut pulls 1.3 kHz down (dB), trim sets the final level (dB) */
-export interface MasterEq {
+/** Sidechain pumping: at every hit of another track (usually the kick) the level dips, then swells back */
+export interface Duck {
+  /** The name of the track whose hits duck this one, in the same section (it pumps even while that track is muted) */
+  by: string;
+  /** How far the level dips, 0-1 (default 0.7) */
+  depth?: number;
+  /** Steps until it is back up (default 4: a beat) */
+  release?: number;
+}
+
+/**
+ * A filter sweep, { step: Hz }, counted from the start of the section: the cutoff glides from one to the next (evenly in pitch) and
+ * holds before the first and after the last. `{ 0: 400, 128: 400, 256: 18000 }` stays dark for eight bars, then opens over eight more.
+ */
+export type Sweep = Record<number, number>;
+
+export interface Master {
+  /** Body at 150 Hz, dB */
   warm?: number;
+  /** Pulls 1.3 kHz down, dB */
   cut?: number;
+  /** Level of the mix, dB */
   trim?: number;
+  /** Bus compression that glues the mix together, 0-1 (0.3 gentle, 0.6 firm) */
+  glue?: number;
+  /** Master loud: dB pushed into a brickwall limiter that peaks at -1 dBFS (EDM: about 6-10). The song then bypasses the gentle limiter other songs share */
+  loud?: number;
 }
 
 export const DEFAULT_REVERB: Reverb = { size: 1.8, damp: 0.45 };
@@ -97,6 +125,11 @@ export const DEFAULT_REVERB: Reverb = { size: 1.8, damp: 0.45 };
  */
 export function defineSong(song: Song): Song {
   return song;
+}
+
+/** A track's name: its own, or its instrument's */
+export function trackName(track: Track): string {
+  return track.name ?? track.instrument;
 }
 
 /** The part a track plays (melody strings are read in the song's meter) */

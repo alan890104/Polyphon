@@ -2,7 +2,7 @@
 // and handles the browser's audio unlock. One song plays at a time; jingles can be layered on top.
 
 import type { Song } from '../song.ts';
-import { createOutputStage } from './output.ts';
+import { createOutputStage, mastersItself } from './output.ts';
 import { Playback } from './playback.ts';
 import { prepareSong, prepareSongSync } from './prepare.ts';
 
@@ -51,8 +51,8 @@ export class Jukebox {
   private readonly destination?: AudioNode;
   private readonly songs: Record<string, SongSource>;
   private readonly loaded = new Map<SongSource, Promise<Song>>();
-  private volumeNode: GainNode | null = null;
-  private duckNode: GainNode | null = null;
+  /** The music buses, each a volume and a duck gain: [into the output stage, around it for songs mastered loud] */
+  private buses: { volume: GainNode; duck: GainNode }[] = [];
   private volumeLevel: number;
   private timer: ReturnType<typeof setInterval> | null = null;
   /** Incremented whenever the current song changes: a song still loading only starts if nothing replaced it */
@@ -80,7 +80,7 @@ export class Jukebox {
   /** The audio context (created on first use; it starts on the first click, tap or key press if the browser requires one) */
   get context(): AudioContext {
     if (!this.ctx) this.ctx = new AudioContext();
-    if (!this.volumeNode) this.connect(this.ctx);
+    if (!this.buses.length) this.connect(this.ctx);
     return this.ctx;
   }
 
@@ -112,7 +112,7 @@ export class Jukebox {
 
   set volume(value: number) {
     this.volumeLevel = Math.min(1, Math.max(0, value));
-    if (this.volumeNode && this.ctx) this.volumeNode.gain.setTargetAtTime(this.volumeLevel, this.ctx.currentTime, 0.02);
+    if (this.ctx) for (const { volume } of this.buses) volume.gain.setTargetAtTime(this.volumeLevel, this.ctx.currentTime, 0.02);
   }
 
   /**
@@ -189,7 +189,7 @@ export class Jukebox {
   playOnce(song: Song): Playback {
     const ctx = this.context;
     prepareSongSync(ctx, song);
-    const active = new Playback(ctx, this.volumeNode!, song, { at: ctx.currentTime + 0.03, loops: 1 });
+    const active = new Playback(ctx, this.busFor(song), song, { at: ctx.currentTime + 0.03, loops: 1 });
     active.schedule(active.startTime + active.duration);
     return active;
   }
@@ -202,25 +202,29 @@ export class Jukebox {
    * jukebox.duck(-30, { attack: 0.12, hold: 4, release: 0.6 }); // near silence for a cutscene beat
    */
   duck(db: number, { attack = 0, hold = 0, release = 0.35 }: DuckOptions = {}): void {
-    if (!this.duckNode || !this.ctx) return;
-    const g = this.duckNode.gain;
+    if (!this.ctx) return;
     const t = this.ctx.currentTime;
     const level = Math.pow(10, db / 20);
-    g.cancelScheduledValues(t);
-    g.setValueAtTime(attack > 0 ? g.value : level, t);
-    if (attack > 0) g.linearRampToValueAtTime(level, t + attack);
-    g.setValueAtTime(level, t + attack + hold);
-    g.linearRampToValueAtTime(1, t + attack + hold + release);
+    for (const { duck } of this.buses) {
+      const g = duck.gain;
+      g.cancelScheduledValues(t);
+      g.setValueAtTime(attack > 0 ? g.value : level, t);
+      if (attack > 0) g.linearRampToValueAtTime(level, t + attack);
+      g.setValueAtTime(level, t + attack + hold);
+      g.linearRampToValueAtTime(1, t + attack + hold + release);
+    }
   }
 
   /** Bring ducked music back now */
   unduck(release = 0.3): void {
-    if (!this.duckNode || !this.ctx) return;
-    const g = this.duckNode.gain;
+    if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    g.cancelScheduledValues(t);
-    g.setValueAtTime(g.value, t);
-    g.linearRampToValueAtTime(1, t + release);
+    for (const { duck } of this.buses) {
+      const g = duck.gain;
+      g.cancelScheduledValues(t);
+      g.setValueAtTime(g.value, t);
+      g.linearRampToValueAtTime(1, t + release);
+    }
   }
 
   /** Resume the audio context; call from a click or key handler if you want sound to start on that exact gesture */
@@ -244,7 +248,7 @@ export class Jukebox {
 
   private start(song: Song, options: { fadeIn: number; from?: number }): Playback {
     const ctx = this.context;
-    const active = new Playback(ctx, this.volumeNode!, song, { ...options, loops: this.loops, at: ctx.currentTime + 0.08 });
+    const active = new Playback(ctx, this.busFor(song), song, { ...options, loops: this.loops, at: ctx.currentTime + 0.08 });
     for (const t of active.tracks) if (this.carry.has(`${t.section}|${t.name}`)) t.muted = true;
     this.carry = new Set();
     this.active = active;
@@ -279,12 +283,21 @@ export class Jukebox {
     return p;
   }
 
-  /** Build the music bus (volume → duck → output stage) and arrange for the context to start on the first user gesture */
+  /** Where a song goes in: songs mastered loud have their own limiter, so they go around the output stage */
+  private busFor(song: Song): GainNode {
+    return this.buses[mastersItself(song) ? 1 : 0].volume;
+  }
+
+  /** Build the music buses (volume → duck → output stage, and volume → duck straight out) and arrange for the context to start on the first user gesture */
   private connect(ctx: AudioContext): void {
-    this.volumeNode = ctx.createGain();
-    this.volumeNode.gain.value = this.volumeLevel;
-    this.duckNode = ctx.createGain();
-    this.volumeNode.connect(this.duckNode).connect(createOutputStage(ctx, this.destination ?? ctx.destination));
+    const out = this.destination ?? ctx.destination;
+    this.buses = [createOutputStage(ctx, out), out].map((to) => {
+      const volume = ctx.createGain();
+      volume.gain.value = this.volumeLevel;
+      const duck = ctx.createGain();
+      volume.connect(duck).connect(to);
+      return { volume, duck };
+    });
     if (ctx.state !== 'suspended' || typeof window === 'undefined') return;
     const events = ['pointerdown', 'keydown', 'touchend'] as const;
     const unlock = () => void ctx.resume();
