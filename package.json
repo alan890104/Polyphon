@@ -4,9 +4,13 @@
   "description": "Music for the browser, written as code: a score notation, a synthesized orchestra and a scheduler on top of the Web Audio API. No audio files.",
   "license": "MIT",
   "author": "Yu Lun Hsu",
+  "homepage": "https://alan890104.github.io/Polyphon/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/alan890104/polyphon.git"
+  },
+  "bugs": {
+    "url": "https://github.com/alan890104/Polyphon/issues"
   },
   "keywords": [
     "music",
