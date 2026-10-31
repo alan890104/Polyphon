@@ -146,27 +146,16 @@ export const WarningIcon = () => (
   </Line>
 );
 
-/** The Polyphon mark: a perforated disc, its tune punched in two tracks around the hub and the spindle hole */
+/** The Polyphon mark: a music box's comb, seven tuned tines cut from one plate, longest (lowest) to shortest (highest) */
 export const Logo = () => (
-  <svg className="logo" viewBox="0 0 40 40" fill="none" stroke="currentColor" aria-hidden="true" focusable="false">
-    <circle cx="20" cy="20" r="18.75" strokeWidth="1.5" />
-    <circle cx="20" cy="20" r="6.25" strokeWidth="1.5" />
-    <circle cx="20" cy="20" r="1.9" strokeWidth="1.5" />
-    <g fill="currentColor" stroke="none">
-      <circle cx="25.94" cy="6.66" r="1.2" />
-      <circle cx="30.14" cy="9.5" r="1.2" />
-      <circle cx="29.38" cy="31.18" r="1.2" />
-      <circle cx="5.54" cy="17.97" r="1.2" />
-      <circle cx="7.36" cy="12.7" r="1.2" />
-      <circle cx="30.37" cy="22.2" r="1.2" />
-      <circle cx="28.79" cy="25.93" r="1.2" />
-      <circle cx="9.71" cy="22.56" r="1.2" />
-      <circle cx="14.07" cy="11.21" r="1.2" />
-    </g>
-    <path
-      d="M33.34 14.06A14.6 14.6 0 0 1 34.56 21.02M24.51 33.89A14.6 14.6 0 0 1 20.51 34.59M11.42 31.81A14.6 14.6 0 0 1 6.11 24.51M21.84 9.56A10.6 10.6 0 0 1 26.53 11.65M18.16 30.44A10.6 10.6 0 0 1 14.07 28.79"
-      strokeWidth="2.4"
-      strokeLinecap="round"
-    />
+  <svg className="logo" viewBox="0 0 40 40" fill="currentColor" aria-hidden="true" focusable="false">
+    <path d="M5 30h30v4H5z" />
+    <rect x="5" y="6" width="2.6" height="25" rx="1.3" />
+    <rect x="9.6" y="9" width="2.6" height="22" rx="1.3" />
+    <rect x="14.2" y="12" width="2.6" height="19" rx="1.3" />
+    <rect x="18.8" y="14.6" width="2.6" height="16.4" rx="1.3" />
+    <rect x="23.4" y="17" width="2.6" height="14" rx="1.3" />
+    <rect x="28" y="19.2" width="2.6" height="11.8" rx="1.3" />
+    <rect x="32.4" y="21.2" width="2.6" height="9.8" rx="1.3" />
   </svg>
 );
