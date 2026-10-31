@@ -40,6 +40,7 @@ Polyphon 源自生物對戰 RPG [Eldor（艾爾多）](https://github.com/alan89
 | Canon in D | 帕海貝爾《卡農》全曲：三把小提琴輪唱，大提琴反覆低音 | [▶ 4:08](docs/audio/canon.mp3) |
 | Canon in D Minor | 同一首卡農移到 D 小調，以原曲轉換而成 | [▶ 4:08](docs/audio/canon-minor.mp3) |
 | Symphony No. 5 | 貝多芬《第五號交響曲》第一樂章呈示部，完整管弦樂團 | [▶ 1:19](docs/audio/symphony5.mp3) |
+| Carmen: Prelude | 比才《卡門》第一幕前奏曲全曲，完整管弦樂團：鬥牛士進場、鬥牛士之歌、命運動機 | [▶ 3:36](docs/audio/carmen.mp3) |
 
 ## 它能做什麼
 
