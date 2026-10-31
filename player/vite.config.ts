@@ -10,4 +10,6 @@ export default defineConfig({
   plugins: [react()],
   resolve: { conditions: ['polyphon-source', ...defaultClientConditions] },
   server: { fs: { allow: [fileURLToPath(new URL('..', import.meta.url))] } },
+  // The music box's chunk carries three.js (about 580 kB, fetched only when the music box is shown)
+  build: { chunkSizeWarningLimit: 640 },
 });

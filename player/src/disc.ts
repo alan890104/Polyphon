@@ -5,7 +5,7 @@
 
 import { compileSection, type ScheduledNote, type Song, type Track } from 'polyphon';
 import { playable, trackName, type LibraryPlaylist, type ReadySong } from './library.ts';
-import { swungStep } from './visuals/timeline.ts';
+import { drumOf, swungStep, type Drum } from './visuals/timeline.ts';
 
 export interface Perforation {
   /** Start, as a fraction of one turn: when it sounds, swing and strums included, so it passes the comb as it plays */
@@ -14,6 +14,8 @@ export interface Perforation {
   length: number;
   /** Across the band of tracks, 0 (lowest pitch, inner edge) to 1 (highest, outer edge); null for unpitched drums, which have a ring of their own */
   pitch: number | null;
+  /** How heavy a drum an unpitched hit is (null for a pitched note) */
+  drum: Drum | null;
   /** 0-1 */
   velocity: number;
   /** Part of the tune */
@@ -286,11 +288,15 @@ function punch(song: Song): Perforation[] {
   for (const { tracks, notes, duration } of sections) {
     for (const note of notes) {
       const track = tracks[note.track];
+      // A silent track only drives another's ducking: nothing is heard, so nothing is punched
+      if (track.gain === 0) continue;
       const at = offset + swungStep(song, note.time);
       const strum = (note.strum ?? 0) / stepSeconds;
       const hole = { length: Math.min(note.duration, LONGEST) / turn, velocity: note.velocity, lead: trackName(track) === tune };
-      if (!note.pitches.length) holes.push({ ...hole, at: at / turn, midi: null });
-      note.pitches.forEach((midi, k) => holes.push({ ...hole, at: (at + k * strum) / turn, midi: midi + (track.transpose ?? 0) }));
+      // A drum's pitch only picks its sample: it is a hit on the drum ring, not a note on the tracks
+      const drum = drumOf(track.instrument);
+      if (drum || !note.pitches.length) holes.push({ ...hole, at: at / turn, midi: null, drum: drum ?? 'mid' });
+      else note.pitches.forEach((midi, k) => holes.push({ ...hole, at: (at + k * strum) / turn, midi: midi + (track.transpose ?? 0), drum: null }));
     }
     offset += duration;
   }
@@ -308,7 +314,7 @@ function punch(song: Song): Perforation[] {
 function tuneTrack(tracks: Track[], notes: ScheduledNote[]): string | null {
   const stats = tracks.map(() => ({ notes: 0, chords: 0, pitchSum: 0, pitches: new Set<number>(), lengths: new Set<number>() }));
   for (const note of notes) {
-    if (!note.pitches.length) continue;
+    if (!note.pitches.length || drumOf(tracks[note.track].instrument)) continue;
     const s = stats[note.track];
     s.notes++;
     if (note.pitches.length > 1) s.chords++;

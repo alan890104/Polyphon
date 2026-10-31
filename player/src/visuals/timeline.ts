@@ -23,12 +23,16 @@ interface Section {
   longest: number;
 }
 
-/** Drums and effects whose pitch only picks a sample: shown as hits, not as notes on a keyboard */
-const UNPITCHED = new Set([
-  'kick', 'boom', 'snare', 'field', 'rim', 'clap', 'hat', 'ohat', 'ride', 'crash', 'swell', 'shaker', 'tamb',
-  'woodblock', 'clave', 'anvil', 'gong', 'thunder', 'thunderclap', 'chain', 'snap', 'brush', 'drip',
-  'kick909', 'bigKick', 'snare909', 'clap909', 'hat909', 'ohat909', 'impact',
-]);
+/** How heavy a hit is: the low drums (kicks, booms, gongs), the middle ones (snares, claps, wood) or the high ones (hats, cymbals) */
+export type Drum = 'low' | 'mid' | 'high';
+
+/** Drums and effects whose pitch only picks a sample, by weight: shown as hits, not as notes on a keyboard */
+const DRUMS: Record<Drum, readonly string[]> = {
+  low: ['kick', 'boom', 'kick909', 'bigKick', 'gong', 'thunder', 'thunderclap', 'impact'],
+  mid: ['snare', 'snare909', 'field', 'rim', 'clap', 'clap909', 'snap', 'brush', 'woodblock', 'clave', 'anvil', 'chain', 'drip'],
+  high: ['hat', 'ohat', 'hat909', 'ohat909', 'ride', 'crash', 'swell', 'shaker', 'tamb'],
+};
+const UNPITCHED = new Map(Object.entries(DRUMS).flatMap(([drum, names]) => names.map((name) => [name, drum as Drum])));
 /** Ambience beds: a looped texture with no notes to show */
 const AMBIENCE = new Set(['wind', 'sea', 'fire', 'crickets', 'rain', 'void', 'cave']);
 
@@ -130,7 +134,7 @@ function compileTracks(song: Song, tracks: Track[], step: number, groupOf: (trac
     const duration = n.duration * step;
     longest = Math.max(longest, duration);
     const base = { velocity: n.velocity, track: groups[n.track] };
-    if (!n.pitches.length || UNPITCHED.has(track.instrument)) {
+    if (!n.pitches.length || drumOf(track.instrument)) {
       notes.push({ ...base, start: at, end: at + duration, pitch: -1 });
       continue;
     }
@@ -141,6 +145,11 @@ function compileTracks(song: Song, tracks: Track[], step: number, groupOf: (trac
   }
   notes.sort((a, b) => a.start - b.start);
   return { duration: compiled.duration * step, notes, longest };
+}
+
+/** How heavy a hit an instrument plays, or null for one that plays notes */
+export function drumOf(instrument: string): Drum | null {
+  return UNPITCHED.get(instrument) ?? null;
 }
 
 /** A step with the song's swing applied to on-grid steps (as the playback does) */

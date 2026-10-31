@@ -76,6 +76,8 @@ export interface Layer {
   dispose(): void;
   /** CSS pixels at the bottom taken by fixed furniture (the piano keyboard): the view keeps its controls above them */
   inset?(): number;
+  /** It paints every pixel itself (a room of its own): no background is drawn under it */
+  readonly opaque?: boolean;
 }
 
 /** An entry in a registry: how to make the layer, at what resolution, and what to use when it cannot run */
@@ -86,6 +88,8 @@ export interface LayerKind<Id extends string = string> {
   description: string;
   /** Backing-store resolution as a fraction of the device pixel ratio (soft backgrounds draw at less) */
   resolution?: number;
+  /** The most backing-store pixels per CSS pixel, whatever the screen (a 3D scene costs per pixel) */
+  maxScale?: number;
   create(): Layer;
   fallback?: () => Layer;
 }

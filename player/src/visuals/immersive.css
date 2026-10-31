@@ -366,6 +366,12 @@
   clear: both;
 }
 
+.immersive-section__note {
+  margin: 0 0 10px;
+  font: 400 12px/1.4 var(--iv-sans);
+  color: var(--iv-muted);
+}
+
 .immersive-choice {
   position: relative;
   display: grid;
