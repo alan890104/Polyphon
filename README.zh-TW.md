@@ -267,6 +267,8 @@ const buffer = await renderSong(song, { loops: 1 });  // OfflineAudioContext，�
 const wav = encodeWav(buffer);                        // 16-bit PCM
 ```
 
+WAV 是無損的，但檔案很大，每分鐘約 10 MB。要 MP3（大約七分之一大）就把 buffer 交給 MP3 編碼器；鑑賞室是在 worker 裡用 [lamejs](https://github.com/zhuker/lamejs) 編碼（`player/src/mp3.ts`），所以函式庫本身不需要任何編碼器。
+
 ## 音樂鑑賞室
 
 ```bash
@@ -274,7 +276,7 @@ npm install
 npm run dev
 ```
 
-播放器收錄所有範例（貝多芬《月光》與《第五號交響曲》、帕海貝爾《D 大調卡農》和幾首短曲），有可以靜音或獨奏各軌的混音台、WAV 下載和 MIDI 匯入。每首歌的封面就是它的樂譜：音符打成圓盤上的孔，角度是時間、半徑是音高，主旋律是黃銅色。播放時圓盤在簧片梳下轉動，孔經過時會亮起來。
+播放器收錄所有範例（貝多芬《月光》與《第五號交響曲》、帕海貝爾《D 大調卡農》和幾首短曲），有可以靜音或獨奏各軌的混音台、MP3 與 WAV 下載和 MIDI 匯入。每首歌的封面就是它的樂譜：音符打成圓盤上的孔，角度是時間、半徑是音高，主旋律是黃銅色。播放時圓盤在簧片梳下轉動，孔經過時會亮起來。
 
 按 **F**（或視覺化按鈕）進入沉浸模式：全螢幕，聆聽時控制列會自動淡出。可以選擇樣式（被頻譜環繞的轉動圓盤、落到鋼琴鍵盤上的音符、頻譜、波形、山脊圖、粒子）、背景（墨色、這首歌的圓盤、極光、星空或你自己的圖片）和配色主題，設定會被記住。落下的音符和圓盤都直接照樂譜走，和你聽到的聲音同步。匯入的 MIDI 只留在你的瀏覽器裡。
 
@@ -295,6 +297,7 @@ Node 22.18 以上可以直接執行 TypeScript 原始碼。
 - 《第五號交響曲》範例的音符對照 [Mutopia Project](https://www.mutopiaproject.org) 的版本（樂曲與該版本都是公有領域）。
 - 《卡農》範例的音符對照 [Mutopia Project](https://www.mutopiaproject.org) 的版本（樂曲本身是公有領域；該版本以 CC BY 4.0 授權）。
 - 鋼琴的弦損耗模型參考 A. Chaigne 與 A. Askenfelt 的 *Numerical simulations of piano strings*（1994）。
+- 鑑賞室的 MP3 下載使用 [lamejs](https://github.com/zhuker/lamejs)，它是 [LAME](https://lame.sourceforge.io) 的 JavaScript 移植版（LGPL-3.0），未經修改、以獨立檔案載入，只在下載歌曲時才會用到。
 
 ## 授權
 

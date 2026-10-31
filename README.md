@@ -267,6 +267,8 @@ const buffer = await renderSong(song, { loops: 1 });  // OfflineAudioContext, fa
 const wav = encodeWav(buffer);                        // 16-bit PCM
 ```
 
+A WAV is lossless but large, about 10 MB a minute. For an MP3 (about a seventh of that), hand the buffer to an MP3 encoder; the listening room does it with [lamejs](https://github.com/zhuker/lamejs) in a worker (`player/src/mp3.ts`), so the library itself needs none.
+
 ## The listening room
 
 ```bash
@@ -274,7 +276,7 @@ npm install
 npm run dev
 ```
 
-The player lists every example song (Beethoven's Moonlight Sonata and Fifth Symphony, Pachelbel's Canon in D and a few short demos), with a mixer to mute or solo tracks, WAV download and MIDI import. Every song's cover is its score: the notes punched into a disc, angle for time and radius for pitch, the tune in brass. While a song plays its disc turns under the comb and the perforations light up as they pass.
+The player lists every example song (Beethoven's Moonlight Sonata and Fifth Symphony, Pachelbel's Canon in D and a few short demos), with a mixer to mute or solo tracks, MP3 and WAV download and MIDI import. Every song's cover is its score: the notes punched into a disc, angle for time and radius for pitch, the tune in brass. While a song plays its disc turns under the comb and the perforations light up as they pass.
 
 Press **F** (or the visualizer button) for the immersive view: full screen, the controls fade away while you listen. Pick a style (the turning disc ringed by its spectrum, falling notes onto a piano keyboard, spectrum, waveform, ridgeline, particles), a background (ink, the song's disc, aurora, starfield or a picture of your own) and a theme; the choice is remembered. Falling notes and the disc follow the score itself, in time with what you hear. MIDI files you import stay in your browser.
 
@@ -295,6 +297,7 @@ Node 22.18 or later runs the TypeScript sources directly.
 - The Fifth Symphony example was checked against the [Mutopia Project](https://www.mutopiaproject.org) edition (the music and the edition are both public domain).
 - The Canon in D example was checked against the [Mutopia Project](https://www.mutopiaproject.org) edition (the music is public domain; the edition is licensed CC BY 4.0).
 - The piano's string loss follows A. Chaigne and A. Askenfelt, *Numerical simulations of piano strings* (1994).
+- The listening room's MP3 download uses [lamejs](https://github.com/zhuker/lamejs), a JavaScript port of [LAME](https://lame.sourceforge.io) (LGPL-3.0), loaded unmodified and in its own file, only when a song is downloaded.
 
 ## License
 

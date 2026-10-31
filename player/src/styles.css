@@ -616,10 +616,15 @@ button.track:hover {
   height: 20px;
 }
 
+.downloads {
+  display: flex;
+  align-self: flex-start;
+  gap: 8px;
+}
+
 .download-button {
   display: inline-flex;
   align-items: center;
-  align-self: flex-start;
   gap: 8px;
   height: 32px;
   padding: 0 12px 0 8px;
@@ -638,6 +643,17 @@ button.track:hover {
 .download-button:disabled {
   color: var(--paper-2);
   cursor: progress;
+}
+
+/* The lossless copy, for editing: quieter than the MP3 */
+.download-button--wav {
+  padding: 0 12px;
+  border-color: var(--line);
+  color: var(--paper-2);
+}
+
+.download-button--wav:hover:not(:disabled) {
+  color: var(--paper);
 }
 
 .download-button .icon {

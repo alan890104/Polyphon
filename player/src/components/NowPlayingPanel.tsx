@@ -5,7 +5,7 @@ import { songDisc } from '../disc.ts';
 import { formatMeter, formatTime } from '../format.ts';
 import { usePlayer, usePlayerState } from '../usePlayer.ts';
 import { DiscPlayer } from './DiscPlayer.tsx';
-import { DownloadButton } from './DownloadButton.tsx';
+import { Downloads } from './Downloads.tsx';
 import { IconButton } from './IconButton.tsx';
 import { CloseIcon, VisualizerIcon } from './Icons.tsx';
 import { Spinner } from './Indicators.tsx';
@@ -76,7 +76,7 @@ export function NowPlayingPanel({ onClose, onVisualizer }: NowPlayingPanelProps)
           <dd>{formatTime(song.duration)}</dd>
         </div>
       </dl>
-      <DownloadButton key={song.id} song={song.song} />
+      <Downloads key={song.id} song={song.song} />
       <Mixer song={song} />
     </aside>
   );

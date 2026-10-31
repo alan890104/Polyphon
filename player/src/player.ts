@@ -4,6 +4,7 @@
 import { encodeWav, Jukebox, renderSong, type JukeboxState, type Playback, type Song } from 'polyphon';
 import { errorMessage } from './format.ts';
 import { playable, type LibraryPlaylist, type ReadySong } from './library.ts';
+import { encodeMp3, MP3_RATES } from './mp3.ts';
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
@@ -148,10 +149,15 @@ export class Player {
     this.setMuted(soloist(names, muted) === name ? new Set() : new Set(names.filter((n) => n !== name)));
   }
 
-  /** Render a song offline as a WAV file. At the live context's sample rate, the samples prepared for playback are reused. */
-  async exportWav(song: Song): Promise<Blob> {
-    const buffer = await renderSong(song, { loops: 1, sampleRate: this.connect().jukebox.context.sampleRate });
-    return new Blob([encodeWav(buffer)], { type: 'audio/wav' });
+  /**
+   * Render a song offline as an audio file: an MP3 (192 kbps, small, plays everywhere) or a lossless WAV. At the live context's sample
+   * rate, the samples prepared for playback are reused; an MP3 renders at 48 kHz when the context runs at a rate MP3 lacks.
+   */
+  async exportAudio(song: Song, format: 'mp3' | 'wav'): Promise<Blob> {
+    const live = this.connect().jukebox.context.sampleRate;
+    const sampleRate = format === 'wav' || MP3_RATES.includes(live) ? live : 48000;
+    const buffer = await renderSong(song, { loops: 1, sampleRate });
+    return format === 'mp3' ? encodeMp3(buffer) : new Blob([encodeWav(buffer)], { type: 'audio/wav' });
   }
 
   private async start(playlist: LibraryPlaylist, song: ReadySong): Promise<void> {
