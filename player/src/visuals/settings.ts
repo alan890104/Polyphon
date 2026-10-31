@@ -27,7 +27,7 @@ const KEY = 'polyphon.visuals';
 
 export function defaultSettings(reducedMotion: boolean): VisualSettings {
   return {
-    style: 'circular',
+    style: 'musicbox',
     background: 'ink',
     theme: 'brass',
     sensitivity: 1,

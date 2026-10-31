@@ -1,6 +1,6 @@
 # Polyphon
 
-**用程式碼寫音樂，在瀏覽器裡演奏。** 一套記譜語法、一支 119 種樂器的合成樂團，加上一個排程器，全部建立在 Web Audio API 上。沒有任何音檔：每個音都是在瀏覽器裡算出來的。
+**用程式碼寫音樂，在瀏覽器裡演奏。** 一套記譜語法、一支 120 種樂器的合成樂團，加上一個排程器，全部建立在 Web Audio API 上。沒有任何音檔：每個音都是在瀏覽器裡算出來的。
 
 [English](README.md)
 
@@ -40,6 +40,7 @@ Polyphon 源自生物對戰 RPG [Eldor（艾爾多）](https://github.com/alan89
 | Canon in D | 帕海貝爾《卡農》全曲：三把小提琴輪唱，大提琴反覆低音 | [▶ 4:08](docs/audio/canon.mp3) |
 | Canon in D Minor | 同一首卡農移到 D 小調，以原曲轉換而成 | [▶ 4:08](docs/audio/canon-minor.mp3) |
 | Symphony No. 5 | 貝多芬《第五號交響曲》第一樂章呈示部，完整管弦樂團 | [▶ 1:19](docs/audio/symphony5.mp3) |
+| Carmen: Prelude | 比才《卡門》第一幕前奏曲全曲，完整管弦樂團：鬥牛士進場、鬥牛士之歌、命運動機 | [▶ 3:36](docs/audio/carmen.mp3) |
 
 ## 它能做什麼
 
@@ -134,7 +135,8 @@ chords('Dm:12 A7:4 | %');                      // 明確寫長度；% 表示上�
 defineSong({
   title: 'Night Waltz',
   description: 'A 小調，3/4',
-  bpm: 84,
+  bpm: 84,                   // 開頭的速度
+  tempo: [{ bar: 33, bpm: 72, over: 4 }],  // 速度變化，見下方
   meter: '3/4',              // 預設 '4/4'
   swing: 0,                  // 八分音符搖擺 0-0.5；十六分音符用 swing16
   reverb: { size: 2.6, damp: 0.5, preDelay: 0.02, early: 0.3, mix: 1 },
@@ -148,6 +150,20 @@ defineSong({
 ```
 
 一個段落的長度等於最長的軌道（補足整小節），較短的軌道會重複填滿，除非設 `repeat: false`。
+
+速度可以在曲中改變，可以突然換，也可以逐漸變快變慢。小節從整首歌的開頭算起（前奏的小節在前），循環的主體每一輪都會重新走一次這些變化。
+
+```ts
+tempo: [
+  { bar: 17, bpm: 66 },           // 從第 17 小節起換成新速度
+  { bar: 29, bpm: 50, over: 4 },  // 漸慢：第 29 到 32 小節逐漸慢到 50
+  { bar: 33, bpm: 84 },           // 回原速
+  { bar: 40.5, bpm: 40 },         // 第 40 小節的後半放慢撐長：延長記號
+  { bar: 41, bpm: 84 },
+]
+```
+
+`tempoClock(song)` 可以把樂譜上的位置換算成秒數（也能反過來），給任何需要跟著音樂走的東西使用。
 
 軌道欄位：
 
@@ -233,7 +249,7 @@ Jukebox 會在第一次使用時建立 `AudioContext`，並在第一次點擊、
 | 低音 | `bass` `synthBass` `reese` `acid` `bass808` `sub` `distBass` |
 | 鼓 | `kick` `boom` `snare` `field` `rim` `clap` `hat` `ohat` `ride` `crash` `swell` `tom` `taiko` `timpani` `frame` `darbuka` |
 | 電子鼓 | `kick808` `kick909` `bigKick` `snare909` `clap909` `hat909` `ohat909` |
-| 打擊 | `shaker` `tamb` `woodblock` `clave` `anvil` `gong` `chain` `snap` `brush` `drip` `thunder` `thunderclap` |
+| 打擊 | `shaker` `tamb` `woodblock` `clave` `anvil` `triangle` `gong` `chain` `snap` `brush` `drip` `thunder` `thunderclap` |
 | 環境音與效果 | `wind` `sea` `fire` `crickets` `rain` `void` `cave` `birds` `riser` `downlifter` `impact` |
 
 它們是怎麼做的：
@@ -275,7 +291,7 @@ const song = songFromMidi(await file.arrayBuffer(), { title: file.name });
 music.play(song);
 ```
 
-`songFromMidi` 會依實際時間保留速度變化，並讀取拍號、延音踏板、音量與聲像。General MIDI 音色會對應到樂團裡的樂器，第 10 頻道對應到鼓組。
+`songFromMidi` 會讓音符留在檔案的拍子格線上，速度變化則成為歌曲本身的速度變化，並讀取拍號、延音踏板、音量與聲像。General MIDI 音色會對應到樂團裡的樂器，第 10 頻道對應到鼓組。
 
 ```ts
 const buffer = await renderSong(song, { loops: 1 });  // OfflineAudioContext，比即時快
@@ -293,7 +309,7 @@ npm run dev
 
 播放器收錄所有範例（貝多芬《月光》與《第五號交響曲》、帕海貝爾《D 大調卡農》與移到 D 小調的同一首卡農，以及幾首短曲），有可以靜音或獨奏各軌的混音台、MP3 與 WAV 下載和 MIDI 匯入。每首歌的封面就是它的樂譜：音符打成圓盤上的孔，角度是時間、半徑是音高，主旋律是黃銅色。播放時圓盤在簧片梳下轉動，孔經過時會亮起來。
 
-按 **F**（或視覺化按鈕）進入沉浸模式：全螢幕，聆聽時控制列會自動淡出。可以選擇樣式（被頻譜環繞的轉動圓盤、落到鋼琴鍵盤上的音符、頻譜、波形、山脊圖、粒子）、背景（墨色、這首歌的圓盤、極光、星空或你自己的圖片）和配色主題，設定會被記住。落下的音符和圓盤都直接照樂譜走，和你聽到的聲音同步。匯入的 MIDI 只留在你的瀏覽器裡。
+按 **F**（或視覺化按鈕）進入沉浸模式：全螢幕，聆聽時控制列會自動淡出。可以選擇樣式（預設是一台 3D 的圓盤音樂盒：你聽到每個音的同時，它的孔正好撥動簧片，盒裡的燈把正在響的音投到盒蓋上；另有被頻譜環繞的轉動圓盤、落到鋼琴鍵盤上的音符、頻譜、波形、山脊圖、粒子）、背景（墨色、這首歌的圓盤、極光、星空或你自己的圖片；音樂盒有自己的房間）和配色主題，設定會被記住。音樂盒、落下的音符和圓盤都直接照樂譜走，和你聽到的聲音同步。匯入的 MIDI 只留在你的瀏覽器裡。
 
 ## 開發
 

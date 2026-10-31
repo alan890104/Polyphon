@@ -2,8 +2,9 @@
 // General MIDI programs pick instruments from the built-in orchestra; channel 10 is the drum kit.
 
 import type { BuiltInInstrument } from './instruments/builtin.ts';
-import type { Note } from './notation/part.ts';
+import { stepsPerBar, type Meter, type Note } from './notation/part.ts';
 import type { Song, Track } from './song.ts';
+import type { TempoChange } from './tempo.ts';
 
 export interface MidiImportOptions {
   /** Song title (default: the file's first track name, or 'Imported MIDI') */
@@ -12,7 +13,7 @@ export interface MidiImportOptions {
 
 /**
  * Convert a Standard MIDI File (format 0 or 1) into a song that plays once.
- * Tempo changes are kept exactly: every event is placed by its real time, measured against the opening tempo.
+ * Notes stay on the file's beat grid and its tempo changes become the song's, so every event still lands at its real time.
  *
  * @example
  * const song = songFromMidi(await file.arrayBuffer(), { title: file.name });
@@ -20,11 +21,10 @@ export interface MidiImportOptions {
  */
 export function songFromMidi(data: ArrayBuffer | Uint8Array, options: MidiImportOptions = {}): Song {
   const file = parseMidi(data instanceof Uint8Array ? data : new Uint8Array(data));
-  const tempos = file.tracks.flatMap((t) => t.events.filter((e) => e.kind === 'tempo')).sort((a, b) => a.tick - b.tick);
-  const clock = tempoMap(tempos, file.ppq);
-  const bpm = tempos.length && tempos[0].tick === 0 ? 60e6 / tempos[0].value : 120;
-  const step = (tick: number) => clock(tick) / (60 / bpm / 4);
+  const step = (tick: number) => (tick / file.ppq) * 4;
   const signature = file.tracks.flatMap((t) => t.events).find((e) => e.kind === 'meter');
+  const meter: Meter = signature ? `${signature.value}/${signature.denominator}` : 16;
+  const { bpm, tempo } = tempoChanges(file, meter);
 
   const groups = new Map<string, { name: string; instrument: BuiltInInstrument; gain: number; pan: number; notes: Note[] }>();
   let end = 0;
@@ -101,8 +101,9 @@ export function songFromMidi(data: ArrayBuffer | Uint8Array, options: MidiImport
   return {
     title,
     description: `Imported from MIDI: ${tracks.length} tracks, ${noteCount} notes.`,
-    bpm: Math.round(bpm * 100) / 100,
-    meter: signature ? (`${signature.value}/${signature.denominator}` as const) : 16,
+    bpm,
+    ...(tempo.length ? { tempo } : {}),
+    meter,
     loop: false,
     tracks,
   };
@@ -195,20 +196,18 @@ function parseTrack(b: Uint8Array, from: number, to: number): MidiFile['tracks']
   return { name, events };
 }
 
-/** Ticks → seconds, following every tempo change */
-function tempoMap(tempos: MidiEvent[], ppq: number): (tick: number) => number {
-  const points: { tick: number; seconds: number; perTick: number }[] = [{ tick: 0, seconds: 0, perTick: 0.5 / ppq }];
-  for (const t of tempos) {
-    if (t.kind !== 'tempo') continue;
-    const last = points[points.length - 1];
-    const seconds = last.seconds + (t.tick - last.tick) * last.perTick;
-    points.push({ tick: t.tick, seconds, perTick: t.value / 1e6 / ppq });
+/** The opening tempo (default 120) and the changes after it, at the bars where they fall (fractional when mid-bar) */
+function tempoChanges(file: MidiFile, meter: Meter): { bpm: number; tempo: TempoChange[] } {
+  const bar = stepsPerBar(meter);
+  let bpm = 120;
+  const tempo: TempoChange[] = [];
+  const events = file.tracks.flatMap((t) => t.events).filter((e) => e.kind === 'tempo');
+  for (const e of events.sort((a, b) => a.tick - b.tick)) {
+    const value = Math.round(60e8 / e.value) / 100;
+    if (e.tick === 0) bpm = value;
+    else if (value !== (tempo.at(-1)?.bpm ?? bpm)) tempo.push({ bar: 1 + (e.tick / file.ppq) * 4 / bar, bpm: value });
   }
-  return (tick) => {
-    let p = points[0];
-    for (const q of points) if (q.tick <= tick) p = q;
-    return p.seconds + (tick - p.tick) * p.perTick;
-  };
+  return { bpm, tempo };
 }
 
 // ───────────────────────── General MIDI ─────────────────────────
@@ -281,4 +280,6 @@ const DRUMS: Record<number, [BuiltInInstrument, string, boolean]> = {
   77: ['woodblock', 'Wood block', true],
   78: ['darbuka', 'Cuica', true],
   79: ['darbuka', 'Cuica', true],
+  80: ['triangle', 'Triangle', false],
+  81: ['triangle', 'Triangle', false],
 };

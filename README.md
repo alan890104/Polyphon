@@ -1,6 +1,6 @@
 # Polyphon
 
-**Music for the browser, written as code.** A score notation, a synthesized orchestra of 119 instruments and a scheduler, on top of the Web Audio API. There are no audio files: every note is computed in the browser.
+**Music for the browser, written as code.** A score notation, a synthesized orchestra of 120 instruments and a scheduler, on top of the Web Audio API. There are no audio files: every note is computed in the browser.
 
 [繁體中文](README.zh-TW.md)
 
@@ -40,6 +40,7 @@ Every example, rendered by Polyphon itself (nothing here was recorded):
 | Canon in D | Pachelbel, complete: three violins in canon over a cello ground | [▶ 4:08](docs/audio/canon.mp3) |
 | Canon in D Minor | The same canon moved into D minor, written as a transformation of the original | [▶ 4:08](docs/audio/canon-minor.mp3) |
 | Symphony No. 5 | Beethoven, the exposition of the first movement, for full orchestra | [▶ 1:19](docs/audio/symphony5.mp3) |
+| Carmen: Prelude | Bizet, the Prelude to Act 1, complete, for full orchestra: the procession, the Toreador's song, the fate motif | [▶ 3:36](docs/audio/carmen.mp3) |
 
 ## What it does
 
@@ -134,7 +135,8 @@ Theory helpers: `midi('C#4')`, `frequency('A4')`, `noteName(61)`, `parseChord('F
 defineSong({
   title: 'Night Waltz',
   description: 'A minor, 3/4',
-  bpm: 84,
+  bpm: 84,                   // the tempo it starts at
+  tempo: [{ bar: 33, bpm: 72, over: 4 }],  // changes of tempo, below
   meter: '3/4',              // default '4/4'
   swing: 0,                  // eighth-note swing 0-0.5; swing16 for sixteenths
   reverb: { size: 2.6, damp: 0.5, preDelay: 0.02, early: 0.3, mix: 1 },
@@ -148,6 +150,20 @@ defineSong({
 ```
 
 A section lasts as long as its longest track, rounded up to whole bars; shorter tracks repeat to fill it unless they set `repeat: false`.
+
+The tempo can change along the way, at once or gradually. Bars count from 1 at the start of the song, the intro's first; a looping body plays its changes again on every pass.
+
+```ts
+tempo: [
+  { bar: 17, bpm: 66 },           // a new tempo from bar 17
+  { bar: 29, bpm: 50, over: 4 },  // ritardando: down to 50 across bars 29 to 32
+  { bar: 33, bpm: 84 },           // a tempo
+  { bar: 40.5, bpm: 40 },         // the second half of bar 40, held back: a fermata
+  { bar: 41, bpm: 84 },
+]
+```
+
+`tempoClock(song)` turns positions in the score into seconds and back, for anything that has to keep time with the music.
 
 A track:
 
@@ -233,7 +249,7 @@ The Jukebox creates its `AudioContext` on first use and starts it on the first c
 | Bass | `bass` `synthBass` `reese` `acid` `bass808` `sub` `distBass` |
 | Drums | `kick` `boom` `snare` `field` `rim` `clap` `hat` `ohat` `ride` `crash` `swell` `tom` `taiko` `timpani` `frame` `darbuka` |
 | Electronic drums | `kick808` `kick909` `bigKick` `snare909` `clap909` `hat909` `ohat909` |
-| Percussion | `shaker` `tamb` `woodblock` `clave` `anvil` `gong` `chain` `snap` `brush` `drip` `thunder` `thunderclap` |
+| Percussion | `shaker` `tamb` `woodblock` `clave` `anvil` `triangle` `gong` `chain` `snap` `brush` `drip` `thunder` `thunderclap` |
 | Ambience and effects | `wind` `sea` `fire` `crickets` `rain` `void` `cave` `birds` `riser` `downlifter` `impact` |
 
 How they are made:
@@ -275,7 +291,7 @@ const song = songFromMidi(await file.arrayBuffer(), { title: file.name });
 music.play(song);
 ```
 
-`songFromMidi` keeps tempo changes in real time and reads the time signature, the sustain pedal, volume and pan. General MIDI programs pick instruments from the orchestra, and channel 10 becomes the drum kit.
+`songFromMidi` keeps the notes on the file's beat grid and its tempo changes as the song's own, and reads the time signature, the sustain pedal, volume and pan. General MIDI programs pick instruments from the orchestra, and channel 10 becomes the drum kit.
 
 ```ts
 const buffer = await renderSong(song, { loops: 1 });  // OfflineAudioContext, faster than real time
@@ -293,7 +309,7 @@ npm run dev
 
 The player lists every example song (Beethoven's Moonlight Sonata and Fifth Symphony, Pachelbel's Canon in D, the same canon moved into D minor, and a few short demos), with a mixer to mute or solo tracks, MP3 and WAV download and MIDI import. Every song's cover is its score: the notes punched into a disc, angle for time and radius for pitch, the tune in brass. While a song plays its disc turns under the comb and the perforations light up as they pass.
 
-Press **F** (or the visualizer button) for the immersive view: full screen, the controls fade away while you listen. Pick a style (the turning disc ringed by its spectrum, falling notes onto a piano keyboard, spectrum, waveform, ridgeline, particles), a background (ink, the song's disc, aurora, starfield or a picture of your own) and a theme; the choice is remembered. Falling notes and the disc follow the score itself, in time with what you hear. MIDI files you import stay in your browser.
+Press **F** (or the visualizer button) for the immersive view: full screen, the controls fade away while you listen. Pick a style (by default a disc music box in 3D, whose comb is plucked by each perforation as you hear its note while a lamp inside throws the notes onto the lid; or the turning disc ringed by its spectrum, falling notes onto a piano keyboard, spectrum, waveform, ridgeline, particles), a background (ink, the song's disc, aurora, starfield or a picture of your own; the music box has a room of its own) and a theme; the choice is remembered. The music box, falling notes and the disc follow the score itself, in time with what you hear. MIDI files you import stay in your browser.
 
 ## Development
 

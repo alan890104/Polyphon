@@ -1,5 +1,6 @@
 // The visualizer engine: it owns the canvases (a background and a style stacked on it), the animation frame loop, the device
 // pixel ratio and the quality governor. It pauses while the tab is hidden and lowers the resolution when frames run long.
+// A style that paints a room of its own (the music box) has no background under it.
 
 import { Analysis } from './analysis.ts';
 import { SongClock, type ClockSource } from './clock.ts';
@@ -75,8 +76,8 @@ export class VisualEngine {
     const box = host.getBoundingClientRect();
     this.width = box.width;
     this.height = box.height;
-    this.background.set(settings.background, this.surfaceSize(settings.background));
     this.style.set(settings.style, this.surfaceSize(settings.style));
+    this.placeBackground();
     this.observer = new ResizeObserver(([entry]) => this.resize(entry.contentRect.width, entry.contentRect.height));
     this.observer.observe(host);
     document.addEventListener('visibilitychange', this.onVisibility);
@@ -102,8 +103,8 @@ export class VisualEngine {
   update(settings: EngineSettings): void {
     const previous = this.settings;
     this.settings = settings;
-    if (settings.background !== previous.background) this.background.set(settings.background, this.surfaceSize(settings.background));
     if (settings.style !== previous.style) this.style.set(settings.style, this.surfaceSize(settings.style));
+    this.placeBackground();
   }
 
   dispose(): void {
@@ -112,6 +113,12 @@ export class VisualEngine {
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.background.dispose();
     this.style.dispose();
+  }
+
+  /** The chosen background, or none under a style that paints its own room */
+  private placeBackground(): void {
+    const kind = this.style.opaque ? null : this.settings.background;
+    if (kind !== this.background.kind) this.background.set(kind, this.surfaceSize(kind));
   }
 
   private start(): void {
@@ -200,13 +207,13 @@ export class VisualEngine {
   private resize(width: number, height: number): void {
     this.width = width;
     this.height = height;
-    this.background.resize(this.surfaceSize(this.settings.background));
+    this.background.resize(this.surfaceSize(this.background.kind));
     this.style.resize(this.surfaceSize(this.settings.style));
   }
 
-  private surfaceSize(kind: LayerKind): Omit<Surface, 'canvas'> {
-    const ratio = Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[this.quality]);
-    return { width: this.width, height: this.height, scale: ratio * (kind.resolution ?? 1) };
+  private surfaceSize(kind: LayerKind | null): Omit<Surface, 'canvas'> {
+    const ratio = Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[this.quality], kind?.maxScale ?? Infinity);
+    return { width: this.width, height: this.height, scale: ratio * (kind?.resolution ?? 1) };
   }
 }
 
@@ -215,6 +222,8 @@ class Slot {
   private readonly className: string;
   private canvas: HTMLCanvasElement;
   private layer: Layer | null = null;
+  /** What it was asked to show (null: nothing, a blank canvas) */
+  kind: LayerKind | null = null;
 
   constructor(host: HTMLElement, className: string) {
     this.className = className;
@@ -222,14 +231,14 @@ class Slot {
     host.append(this.canvas);
   }
 
-  set(kind: LayerKind, size: Omit<Surface, 'canvas'>): void {
+  /** Show a layer (its fallback when it cannot run here), or nothing at all */
+  set(kind: LayerKind | null, size: Omit<Surface, 'canvas'>): void {
     this.layer?.dispose();
     this.layer = null;
-    for (const create of [kind.create, kind.fallback]) {
+    this.kind = kind;
+    for (const create of kind ? [kind.create, kind.fallback] : []) {
       if (!create) continue;
-      const canvas = this.fresh();
-      this.canvas.replaceWith(canvas);
-      this.canvas = canvas;
+      this.renew();
       const layer = create();
       if (layer.init(this.surface(size))) {
         this.layer = layer;
@@ -237,6 +246,7 @@ class Slot {
       }
       layer.dispose();
     }
+    this.renew();
   }
 
   resize(size: Omit<Surface, 'canvas'>): void {
@@ -249,6 +259,11 @@ class Slot {
 
   inset(): number {
     return this.layer?.inset?.() ?? 0;
+  }
+
+  /** The layer running (perhaps the fallback) paints every pixel itself */
+  get opaque(): boolean {
+    return this.layer?.opaque ?? false;
   }
 
   dispose(): void {
@@ -264,6 +279,12 @@ class Slot {
     if (this.canvas.width !== w) this.canvas.width = w;
     if (this.canvas.height !== h) this.canvas.height = h;
     return { canvas: this.canvas, width, height, scale: w / Math.max(1, width) };
+  }
+
+  private renew(): void {
+    const canvas = this.fresh();
+    this.canvas.replaceWith(canvas);
+    this.canvas = canvas;
   }
 
   private fresh(): HTMLCanvasElement {

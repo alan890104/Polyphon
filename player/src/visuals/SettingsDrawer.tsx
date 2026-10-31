@@ -54,6 +54,7 @@ export function SettingsDrawer({ id, settings, update, reset, picture, onClose }
         </Section>
 
         <Section title="Background">
+          {settings.style === 'musicbox' && <p className="immersive-section__note">The music box has a room of its own: backgrounds show with the other styles.</p>}
           {BACKGROUNDS.map((b, i) => (
             <Choice
               key={b.id}

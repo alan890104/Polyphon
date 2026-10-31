@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { songFromMidi, type Note, type Part } from 'polyphon';
+import { songDuration, songFromMidi, type Note, type Part } from 'polyphon';
 
 /** Build a format-1 MIDI file: each track is a list of [delta ticks, ...event bytes] */
 function midiFile(ppq: number, tracks: number[][][]): Uint8Array {
@@ -47,23 +47,28 @@ test('tempo, meter, titles and note timing', () => {
   assert.equal(notes(song, 0)[1].velocity, 1);
 });
 
-test('a tempo change keeps real time: steps are measured against the opening tempo', () => {
+test('tempo changes carry over at the bars where they fall, and notes stay on the beat grid', () => {
   const file = midiFile(96, [
     [
       [0, 0xff, 0x51, 3, 0x07, 0xa1, 0x20], // 120 bpm
       [192, 0xff, 0x51, 3, 0x0f, 0x42, 0x40], // 60 bpm after two beats
+      [0, 0xff, 0x51, 3, 0x0f, 0x42, 0x40], // the same again: nothing changes
     ],
     [
       [0, 0x90, 60, 90],
       [192, 0x80, 60, 0],
       [0, 0x90, 62, 90],
-      [96, 0x80, 62, 0], // one beat at half the speed: twice as long as before
+      [96, 0x80, 62, 0], // one beat at half the speed
     ],
   ]);
-  assert.deepEqual(brief(notes(songFromMidi(file), 0)), [
+  const song = songFromMidi(file);
+  assert.deepEqual(brief(notes(song, 0)), [
     [0, 8, 60],
-    [8, 8, 62],
+    [8, 4, 62],
   ]);
+  assert.deepEqual(song.tempo, [{ bar: 1.5, bpm: 60 }]);
+  // Two beats at 120 and one at 60, rounded up to the whole bar: one more beat at 60
+  assert.deepEqual(songDuration(song), { intro: 0, loop: 1 + 1 + 1 });
 });
 
 test('the sustain pedal holds notes until it is released, or until the key is struck again', () => {
