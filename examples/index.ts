@@ -15,12 +15,13 @@ export const playlists: Playlist[] = [
   {
     id: 'demo',
     title: 'Getting started',
-    description: 'Original pieces that show the notation: a 4/4 market tune, a 3/4 waltz, a piano ballad and a progressive-house track.',
+    description: 'Original pieces that show the notation: a 4/4 market tune, a 3/4 waltz, a piano ballad, a progressive-house track, and Gardel’s Por una Cabeza remade as electro tango.',
     songs: [
       { id: 'morning-market', load: () => load(import('./demo/morning-market.ts')) },
       { id: 'night-waltz', load: () => load(import('./demo/night-waltz.ts')) },
       { id: 'after-midnight', load: () => load(import('./demo/after-midnight.ts')) },
       { id: 'neon-tide', load: () => load(import('./demo/neon-tide.ts')) },
+      { id: 'por-una-cabeza', load: () => load(import('./demo/por-una-cabeza.ts')) },
     ],
   },
   {

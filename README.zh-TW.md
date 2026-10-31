@@ -1,5 +1,9 @@
 # Polyphon
 
+https://github.com/user-attachments/assets/da754130-8c39-4e8d-962d-78e3fc75a40d
+
+<p align="center"><em>Por una Cabeza</em> 電子探戈版。每個音都由 Polyphon 合成，沒有任何錄音。</p>
+
 **用程式碼寫音樂，在瀏覽器裡演奏。** 一套記譜語法、一支 120 種樂器的合成樂團，加上一個排程器，全部建立在 Web Audio API 上。沒有任何音檔：每個音都是在瀏覽器裡算出來的。
 
 [English](README.md)
@@ -50,6 +54,7 @@ https://github.com/user-attachments/assets/2b1fafc0-cbc6-424c-b731-b079f3d0606e
 | Night Waltz | 原創，A 小調圓舞曲：鋼琴配豎琴琶音、弦樂墊音與大提琴 | [▶ 0:20](docs/audio/night-waltz.mp3) |
 | After Midnight | 原創，B 小調鋼琴抒情曲，慢速 R&B 律動，加上弦樂與小提琴 | [▶ 1:42](docs/audio/after-midnight.mp3) |
 | Neon Tide | 原創，F 小調前衛浩室：推升、抽吸的 supersaw drop、鋼琴間奏、最終 drop | [▶ 2:35](docs/audio/neon-tide.mp3) |
+| Por una Cabeza (Electro Tango) | Gardel 的探戈改編成電子探戈：副歌由獨奏小提琴和弦樂唱出，大鼓踩著探戈的 3-3-2；中段是新寫的 A 小調旋律，由大提琴獨奏；推升、全體靜止一拍，最後的副歌以八度齊奏 | [▶ 1:44](docs/audio/por-una-cabeza.mp3) |
 | Moonlight Sonata | 貝多芬《月光》第一樂章開頭，用建模鋼琴演奏 | [▶ 0:43](docs/audio/moonlight.mp3) |
 | Canon in D | 帕海貝爾《卡農》全曲：三把小提琴輪唱，大提琴反覆低音 | [▶ 4:08](docs/audio/canon.mp3) |
 | Canon in D Minor | 同一首卡農移到 D 小調，以原曲轉換而成 | [▶ 4:08](docs/audio/canon-minor.mp3) |

@@ -1,5 +1,9 @@
 # Polyphon
 
+https://github.com/user-attachments/assets/da754130-8c39-4e8d-962d-78e3fc75a40d
+
+<p align="center"><em>Por una Cabeza</em> as electro tango. Every note is synthesized by Polyphon; nothing was recorded.</p>
+
 **Music for the browser, written as code.** A score notation, a synthesized orchestra of 120 instruments and a scheduler, on top of the Web Audio API. There are no audio files: every note is computed in the browser.
 
 [繁體中文](README.zh-TW.md)
@@ -50,6 +54,7 @@ And every one as an MP3:
 | Night Waltz | An original waltz in A minor: piano over harp arpeggios, a string pad and cellos | [▶ 0:20](docs/audio/night-waltz.mp3) |
 | After Midnight | An original piano ballad in B minor over a slow R&B groove, with strings and a violin | [▶ 1:42](docs/audio/after-midnight.mp3) |
 | Neon Tide | An original progressive-house track in F minor: build, pumping supersaw drop, piano breakdown, final drop | [▶ 2:35](docs/audio/neon-tide.mp3) |
+| Por una Cabeza (Electro Tango) | Gardel's tango remade as electro tango: his refrain on a solo violin and strings over a kick on tango's 3-3-2, a new strain in A minor for a solo cello, a build, a dead stop, the last refrains in octaves | [▶ 1:44](docs/audio/por-una-cabeza.mp3) |
 | Moonlight Sonata | Beethoven, the opening of the first movement, on the modelled piano | [▶ 0:43](docs/audio/moonlight.mp3) |
 | Canon in D | Pachelbel, complete: three violins in canon over a cello ground | [▶ 4:08](docs/audio/canon.mp3) |
 | Canon in D Minor | The same canon moved into D minor, written as a transformation of the original | [▶ 4:08](docs/audio/canon-minor.mp3) |
