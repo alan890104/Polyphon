@@ -30,6 +30,17 @@ test('melody: chords, accents, ghost notes, glides, tuplets and repeats', () => 
   assert.equal(p.duration, 4 + 4 + 4 + 16);
 });
 
+test('melody: ties hold a note across bar lines', () => {
+  const p = melody('C4:8 G4:8~ | G4:4~ G4:4 E4:8 |');
+  assert.equal(p.notes.length, 3);
+  assert.equal(p.notes[1].time, 8);
+  assert.equal(p.notes[1].duration, 16);
+  assert.equal(melody('r:4 C4+E4:12~ | C4+E4:4 r:12 |').notes[0].duration, 16);
+  assert.throws(() => melody('C4:8~ D4:8 |'), /same pitch/);
+  assert.throws(() => melody('C4:8~ r:8 |'), /not a rest/);
+  assert.throws(() => melody('C4:16~ |'), /at the end/);
+});
+
 test('meters: time signatures map to steps per bar', () => {
   assert.equal(stepsPerBar('4/4'), 16);
   assert.equal(stepsPerBar('3/4'), 12);

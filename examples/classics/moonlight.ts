@@ -43,7 +43,7 @@ const bass = melody(`
 `);
 
 export default defineSong({
-  title: 'Moonlight Sonata (I. Adagio sostenuto)',
+  title: 'Moonlight Sonata (First Movement)',
   description: 'Beethoven, Op. 27 No. 2, bars 1-9: triplet arpeggios, bass octaves and the dotted melody, pianissimo, pedalled with the harmony.',
   bpm: 54,
   loop: false,

@@ -6,6 +6,7 @@
 //   'C4+E4+G4:16'                    a chord (pitches sounding together)
 //   '!E5:4 ?E5:2'                    ! accent, ? soft (ghost note)
 //   'E5:4> G5:4'                     > glide into the next note (instruments that support glides)
+//   'G4:8~ | G4:4'                   ~ ties into the next note of the same pitch, across bar lines too
 //   'E5:4/3'                         fractional length (a triplet eighth note is 4/3)
 //   '(E5:2 D5:2)*4 R*2'              parenthesized groups repeat; R is a full bar of rest; . is the same as r
 //
@@ -29,6 +30,8 @@ export function melody(source: string, meter: Meter = 16): Part {
   let barStart = 0;
   let barNo = 1;
   let lastR = false;
+  /** The note a ~ holds on into the next one */
+  let tied: Note | undefined;
   for (const raw of expandRepeats(source).split(/\s+/)) {
     if (!raw) continue;
     if (raw === '|') {
@@ -43,6 +46,7 @@ export function melody(source: string, meter: Meter = 16): Part {
       continue;
     }
     if (raw === 'R') {
+      if (tied) throw new Error(`A tie (~) must lead into the same note, not a rest: ${raw}`);
       const atBar = Math.abs(t - barStart) < 1e-6;
       t += bar;
       if (atBar) {
@@ -62,6 +66,8 @@ export function melody(source: string, meter: Meter = 16): Part {
       v = VELOCITY.ghost;
       tok = tok.slice(1);
     }
+    const tie = tok.endsWith('~');
+    if (tie) tok = tok.slice(0, -1);
     let glide = false;
     if (tok.endsWith('>')) {
       glide = true;
@@ -73,9 +79,17 @@ export function melody(source: string, meter: Meter = 16): Part {
       dur = b ? Number(a) / Number(b) : Number(a);
       if (!(dur > 0)) throw new Error(`Invalid duration: ${raw}`);
     }
-    if (pitch !== 'r' && pitch !== '.') notes.push({ time: t, duration: dur, pitches: pitch.split('+').map(midi), velocity: v, glide: glide || undefined });
+    if (pitch === 'r' || pitch === '.') {
+      if (tied || tie) throw new Error(`A tie (~) joins two notes of the same pitch, not a rest: ${raw}`);
+    } else if (tied) {
+      if (pitch.split('+').map(midi).join() !== tied.pitches.join()) throw new Error(`A tie (~) must lead into the same pitch: ${raw}`);
+      tied.duration += dur;
+      if (glide) tied.glide = true;
+    } else notes.push({ time: t, duration: dur, pitches: pitch.split('+').map(midi), velocity: v, glide: glide || undefined });
+    tied = tie ? notes[notes.length - 1] : undefined;
     t += dur;
   }
+  if (tied) throw new Error('A tie (~) at the end of a melody has no note to lead into');
   return { notes, duration: t };
 }
 
