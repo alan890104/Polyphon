@@ -4,8 +4,9 @@
 // closes on the dominant's resolution to D with the aria's own last bar (bar 120).
 // Notes from the vocal score of the first edition, arranged by Bizet himself (Choudens, Paris 1875, A.C. 3082; the music and the
 // edition are public domain), read against Schirmer's vocal score (New York, 1895, also public domain) where the scan is torn or
-// unclear. Carmen and the chorus are sung as written (the voices sing vowels, not words; the tenors sound an octave below their
-// treble staff); the piano part is scored here for Bizet's orchestra, and which instrument plays which line is this arrangement's.
+// unclear. Carmen's line is played by a solo violin rather than sung, taking her leaps up the octave in bars 12 and 16 cleanly; the
+// chorus sings as written (vowels, not words; the tenors sound an octave below their treble staff); the piano part is scored here for
+// Bizet's orchestra, and which instrument plays which line is this arrangement's.
 // Neither edition gives a metronome mark: ♩ = 72 here, broadening into the last bar.
 
 import { defineSong, melody, sequence, transpose, type Part } from 'polyphon';
@@ -99,12 +100,11 @@ const chords = `
   G3+C#4+E4:2 r:2 C#4+F4:2 G3+C#4+E4 |`;
 
 const verse = (() => {
-  // The port de voix in bars 12 and 16 slides up the octave
   const carmen = m(`
     r:4 D5:2 C#5 | ${descent} A4:2 A4:1 A4 G#4:2 G4 | ${turnF}
     E4:2 r:2 D5:2 C#5 | ${descent} ${repeated} ${turnE}
-    D4:4> D5:2 C#5 | ${descent} A4:1 A4 r A4 G#4:2 G4 | ${turnF}
-    E4:4> D5:2 C#5 | ${descent} ${repeated} ${turnE}`);
+    D4:4 D5:2 C#5 | ${descent} A4:1 A4 r A4 G#4:2 G4 | ${turnF}
+    E4:4 D5:2 C#5 | ${descent} ${repeated} ${turnE}`);
   const cellos = habanera('dm', 'dm', 'dm', 'dm', 'gm', 'gm', 'gm', 'a7', 'dm', 'dm', 'dm', 'dm', 'gm', 'gm', 'gm', 'a7');
   return passage(P, {
     carmen,
@@ -183,7 +183,7 @@ const play = (player: Player): Part => sequence(...score.map((p) => p[player]));
 
 export default defineSong({
   title: 'Carmen: Habanera',
-  description: 'Bizet, the opening of Carmen’s entrance aria “L’amour est un oiseau rebelle”: a mezzo-soprano over the cellos’ habanera in D minor, then the chorus in D major.',
+  description: 'Bizet, the opening of Carmen’s entrance aria “L’amour est un oiseau rebelle”: her line on a solo violin over the cellos’ habanera in D minor, then the chorus in D major.',
   bpm: 72,
   // Broadening into the last bar, which is held
   tempo: [
@@ -194,7 +194,7 @@ export default defineSong({
   loop: false,
   reverb: { size: 2.4, damp: 0.5, preDelay: 0.025, mix: 0.85 },
   tracks: [
-    { name: 'Carmen', instrument: 'soprano', part: play('carmen'), gain: 1.9, reverb: 0.3, params: { attack: 0.04, release: 0.35 } },
+    { name: 'Solo violin (Carmen)', instrument: 'violin', part: play('carmen'), gain: 1.6, reverb: 0.3 },
     { name: 'Sopranos', instrument: 'choirO', part: play('sopranos'), gain: 0.6, pan: -0.25, params: { attack: 0.06 } },
     { name: 'Tenors', instrument: 'menChoir', part: play('tenors'), gain: 0.48, pan: 0.2, params: { attack: 0.06 } },
     { name: 'Basses', instrument: 'menChoir', part: play('chorusBasses'), gain: 0.5, pan: 0.35 },
