@@ -41,6 +41,7 @@ Polyphon 源自生物對戰 RPG [Eldor（艾爾多）](https://github.com/alan89
 | Canon in D Minor | 同一首卡農移到 D 小調，以原曲轉換而成 | [▶ 4:08](docs/audio/canon-minor.mp3) |
 | Symphony No. 5 | 貝多芬《第五號交響曲》第一樂章呈示部，完整管弦樂團 | [▶ 1:19](docs/audio/symphony5.mp3) |
 | Carmen: Prelude | 比才《卡門》第一幕前奏曲全曲，完整管弦樂團：鬥牛士進場、鬥牛士之歌、命運動機 | [▶ 3:36](docs/audio/carmen.mp3) |
+| Carmen: Habanera | 比才《卡門》哈巴涅拉舞曲〈愛情是隻不羈的鳥〉的開頭：次女高音唱在大提琴的哈巴涅拉節奏上，從 D 小調走進 D 大調的合唱 | [▶ 0:50](docs/audio/habanera.mp3) |
 
 ## 它能做什麼
 

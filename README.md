@@ -41,6 +41,7 @@ Every example, rendered by Polyphon itself (nothing here was recorded):
 | Canon in D Minor | The same canon moved into D minor, written as a transformation of the original | [▶ 4:08](docs/audio/canon-minor.mp3) |
 | Symphony No. 5 | Beethoven, the exposition of the first movement, for full orchestra | [▶ 1:19](docs/audio/symphony5.mp3) |
 | Carmen: Prelude | Bizet, the Prelude to Act 1, complete, for full orchestra: the procession, the Toreador's song, the fate motif | [▶ 3:36](docs/audio/carmen.mp3) |
+| Carmen: Habanera | Bizet, the opening of Carmen's entrance aria: a mezzo-soprano over the cellos' habanera in D minor, then the chorus in D major | [▶ 0:50](docs/audio/habanera.mp3) |
 
 ## What it does
 
