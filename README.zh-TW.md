@@ -1,5 +1,9 @@
 # Polyphon
 
+https://github.com/user-attachments/assets/da754130-8c39-4e8d-962d-78e3fc75a40d
+
+<p align="center"><em>Por una Cabeza</em> 電子探戈版。每個音都由 Polyphon 合成，沒有任何錄音。</p>
+
 **用程式碼寫音樂，在瀏覽器裡演奏。** 一套記譜語法、一支 120 種樂器的合成樂團，加上一個排程器，全部建立在 Web Audio API 上。沒有任何音檔：每個音都是在瀏覽器裡算出來的。
 
 [English](README.md)

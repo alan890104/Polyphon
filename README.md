@@ -1,5 +1,9 @@
 # Polyphon
 
+https://github.com/user-attachments/assets/da754130-8c39-4e8d-962d-78e3fc75a40d
+
+<p align="center"><em>Por una Cabeza</em> as electro tango. Every note is synthesized by Polyphon; nothing was recorded.</p>
+
 **Music for the browser, written as code.** A score notation, a synthesized orchestra of 120 instruments and a scheduler, on top of the Web Audio API. There are no audio files: every note is computed in the browser.
 
 [繁體中文](README.zh-TW.md)
