@@ -66,6 +66,10 @@ export class Playback {
 
   private readonly sections: [CompiledSection, CompiledSection];
   private readonly strips: [Strip[], Strip[]];
+  /** Closes for the song's silences */
+  private readonly gate: GainNode;
+  /** Each section's silences, [from, to] in steps from its start */
+  private readonly silences: [[number, number][], [number, number][]];
   /** Where each section starts on the clock, in steps */
   private readonly base: [number, number];
   private readonly loops: number;
@@ -94,7 +98,17 @@ export class Playback {
 
     const mixer = createMixer(context, song, destination);
     this.output = mixer.output;
+    this.gate = mixer.gate;
     this.strips = mixer.strips;
+    this.silences = [INTRO, BODY].map((s) => {
+      const { duration } = this.sections[s];
+      return (song.silences ?? [])
+        .map(({ bar, beats }): [number, number] => {
+          const from = (bar - 1) * stepsPerBar(meter) - this.base[s];
+          return [from, Math.min(duration, from + 4 * beats)];
+        })
+        .filter(([from, to]) => from >= 0 && from < duration && to > from);
+    }) as [[number, number][], [number, number][]];
     this.tracks = [...trackHandles(song.intro ?? [], mixer.strips[INTRO], 'intro'), ...trackHandles(song.tracks, mixer.strips[BODY], 'loop')];
 
     const at = options.at ?? context.currentTime + 0.08;
@@ -107,7 +121,7 @@ export class Playback {
     const from = Math.min(Math.max(0, options.from ?? 0), this.duration - 0.001);
     this.secStart = at;
     if (from > 0) this.seek(from, at);
-    else this.sweep(0);
+    else this.automate(0);
     this.startTime = at - from;
   }
 
@@ -143,7 +157,7 @@ export class Playback {
       this.secStart = end;
       this.sec = BODY;
       this.idx = 0;
-      this.sweep(0, again);
+      this.automate(0, again);
     }
   }
 
@@ -245,9 +259,9 @@ export class Playback {
         this.fire(this.sec, { ...n, time: offset, duration: left, bends }, at);
       }
     }
-    // Pick up the pumping and the filter sweeps where they would be by now
+    // Pick up the pumping, the filter sweeps and any silence where they would be by now
     for (const [track, time] of hits) this.duckUnder(track, this.timeOf(time), at);
-    this.sweep(offset);
+    this.automate(offset);
   }
 
   /** A track's hit at `hit` (context seconds): the tracks that duck under it pump (picked up at `from` when the hit is past) */
@@ -255,10 +269,27 @@ export class Playback {
     for (const k of this.sections[this.sec].ducks[track]) pump(this.strips[this.sec][k].pump!, hit, from);
   }
 
-  /** A pass of the current section begins (`from` steps in; `again` when it follows a pass of the same section): send its filters along their sweeps */
-  private sweep(from: number, again = false): void {
+  /**
+   * A pass of the current section begins (`from` steps in; `again` when it follows a pass of the same section): send its filters along
+   * their sweeps and close the gate for its silences. The gate shuts in 10 ms (a hard cut clicks) and is open again a few milliseconds
+   * before the music returns, so a note humanized early keeps its attack
+   */
+  private automate(from: number, again = false): void {
     const { duration } = this.sections[this.sec];
     for (const strip of this.strips[this.sec]) for (const s of strip.sweeps) sweep(s.cutoff, s.points, from, duration, (step) => this.at(step), again);
+    const gate = this.gate.gain;
+    for (const [a, b] of this.silences[this.sec]) {
+      if (b <= from) continue;
+      const start = this.at(Math.max(a, from));
+      const end = this.at(b);
+      if (a < from) gate.setValueAtTime(0, start);
+      else {
+        gate.setValueAtTime(1, start);
+        gate.linearRampToValueAtTime(0, start + 0.01);
+      }
+      gate.setValueAtTime(0, end - 0.009);
+      gate.linearRampToValueAtTime(1, end - 0.005);
+    }
   }
 
   private trackOf(section: number, index: number): Track {

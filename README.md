@@ -152,6 +152,7 @@ defineSong({
   description: 'A minor, 3/4',
   bpm: 84,                   // the tempo it starts at
   tempo: [{ bar: 33, bpm: 72, over: 4 }],  // changes of tempo, below
+  silences: [{ bar: 32.75, beats: 1 }],    // dead stops, below
   meter: '3/4',              // default '4/4'
   swing: 0,                  // eighth-note swing 0-0.5; swing16 for sixteenths
   reverb: { size: 2.6, damp: 0.5, preDelay: 0.02, early: 0.3, mix: 1 },
@@ -179,6 +180,12 @@ tempo: [
 ```
 
 `tempoClock(song)` turns positions in the score into seconds and back, for anything that has to keep time with the music.
+
+A silence is a dead stop: from its bar, counted the same way, everything falls silent for its beats, the reverb and delay tails too, as if the room were switched off, and the music crashes back in at full level. Leaving the notes out makes a rest; a silence makes the beat of nothing before a drop.
+
+```ts
+silences: [{ bar: 32.75, beats: 1 }],  // the last beat of bar 32
+```
 
 A track:
 
