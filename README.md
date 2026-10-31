@@ -1,6 +1,6 @@
 # Polyphon
 
-**Music for the browser, written as code.** A score notation, a synthesized orchestra of 103 instruments and a scheduler, on top of the Web Audio API. There are no audio files: every note is computed in the browser.
+**Music for the browser, written as code.** A score notation, a synthesized orchestra of 119 instruments and a scheduler, on top of the Web Audio API. There are no audio files: every note is computed in the browser.
 
 [繁體中文](README.zh-TW.md)
 
@@ -189,10 +189,12 @@ The Jukebox creates its `AudioContext` on first use and starts it on the first c
 | Brass | `horn` `horns` `trumpet` `trumpets` `trombone` `tuba` `brassStab` |
 | Voices | `choir` `choirOo` `choirO` `menChoir` `chant` `soprano` `throat` |
 | Pads and drones | `warmPad` `glassPad` `darkPad` `airPad` `glass` `drone` |
-| Bass and synths | `bass` `synthBass` `sub` `distBass` `synthLead` `powerGtr` `muteGtr` |
+| Synths and guitars | `supersaw` `synthLead` `pluck` `powerGtr` `muteGtr` |
+| Bass | `bass` `synthBass` `reese` `acid` `bass808` `sub` `distBass` |
 | Drums | `kick` `boom` `snare` `field` `rim` `clap` `hat` `ohat` `ride` `crash` `swell` `tom` `taiko` `timpani` `frame` `darbuka` |
+| Electronic drums | `kick808` `kick909` `bigKick` `snare909` `clap909` `hat909` `ohat909` |
 | Percussion | `shaker` `tamb` `woodblock` `clave` `anvil` `gong` `chain` `snap` `brush` `drip` `thunder` `thunderclap` |
-| Ambience and effects | `wind` `sea` `fire` `crickets` `rain` `void` `cave` `birds` `riser` |
+| Ambience and effects | `wind` `sea` `fire` `crickets` `rain` `void` `cave` `birds` `riser` `downlifter` `impact` |
 
 How they are made:
 
@@ -203,6 +205,8 @@ How they are made:
 - **Winds and brass**: the lips, the reed or the air jet are modelled as a valve (a sine through a nonlinear curve), so the tone brightens with dynamics the way the real instruments do: a soft trumpet is mellow and a loud one blazes, the clarinet keeps mostly odd harmonics in its low register, and the saxophone growls when pushed. Bore and bell are filters and formants; section players enter a few milliseconds apart and sit a few cents off.
 - **Voices**: formant filters (choirs sing vowels), breath noise and per-note vibrato.
 - **Drums**: drumheads as circular-membrane modes that glide as the head settles, with the stick or beater's click; timpani tuned by the air in the kettle (modes near 1 : 1.5 : 2 : 2.5 : 3); cymbal washes that bloom upward after the strike and lose their highs first; velocity-dependent brightness; and random variants, so repeated hits never sound identical.
+- **Synthesizers**: analog subtractive synthesis. The oscillators run free (each note starts them at a random point of their cycle, a cent or two off pitch) into a four-pole low-pass (24 dB/oct, like a transistor ladder) whose cutoff follows the keyboard and whose envelope opens further the harder a note is played. `supersaw` follows Adam Szabo's measurements of the Roland JP-8000 (seven saws on the original detune and mix curves, with a high-pass at the fundamental); `synthLead` is a Minimoog-style lead, `pluck` the trance arpeggio pluck, and `warmPad` and `darkPad` Juno-style chorused pads. `acid` is a TB-303 (accent with `!`, slide with `>`), `reese` a churning detuned bass and `bass808` a gliding 808; the basses stay mono below 120 Hz. `cut`, `q`, `env`, `detune`, `attack`, `release` and `glide` shape each voice.
+- **Electronic drums**: modelled on Roland's drum machines and fitted to recordings. The 808 kick is a bridged-T resonator whose attack briefly raises its pitch; the 909 kick is an oscillator with a fast pitch envelope and a noise click; the clap is three noise bursts about 11 ms apart and a reverberant tail; the 909 hats are 6-bit, like the machine's memory, and a closed hat cuts off a ringing open one. `bigKick` is a modern layered EDM kick: a pitch-dive punch, a clipped sub and a top click. Give a kick a pitch to tune it to the song (`rhythm('X...X...X...X...', { pitch: 'F1' })`); `riser` and `downlifter` last as long as their note, so `melody('C4:128')` is an eight-bar build.
 - **Rooms**: a procedural convolution reverb per song.
 
 Your own instruments:

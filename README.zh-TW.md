@@ -1,6 +1,6 @@
 # Polyphon
 
-**用程式碼寫音樂，在瀏覽器裡演奏。** 一套記譜語法、一支 103 種樂器的合成樂團，加上一個排程器，全部建立在 Web Audio API 上。沒有任何音檔：每個音都是在瀏覽器裡算出來的。
+**用程式碼寫音樂，在瀏覽器裡演奏。** 一套記譜語法、一支 119 種樂器的合成樂團，加上一個排程器，全部建立在 Web Audio API 上。沒有任何音檔：每個音都是在瀏覽器裡算出來的。
 
 [English](README.md)
 
@@ -189,10 +189,12 @@ Jukebox 會在第一次使用時建立 `AudioContext`，並在第一次點擊、
 | 銅管 | `horn` `horns` `trumpet` `trumpets` `trombone` `tuba` `brassStab` |
 | 人聲 | `choir` `choirOo` `choirO` `menChoir` `chant` `soprano` `throat` |
 | 墊音與持續音 | `warmPad` `glassPad` `darkPad` `airPad` `glass` `drone` |
-| 低音與合成器 | `bass` `synthBass` `sub` `distBass` `synthLead` `powerGtr` `muteGtr` |
+| 合成器與吉他 | `supersaw` `synthLead` `pluck` `powerGtr` `muteGtr` |
+| 低音 | `bass` `synthBass` `reese` `acid` `bass808` `sub` `distBass` |
 | 鼓 | `kick` `boom` `snare` `field` `rim` `clap` `hat` `ohat` `ride` `crash` `swell` `tom` `taiko` `timpani` `frame` `darbuka` |
+| 電子鼓 | `kick808` `kick909` `bigKick` `snare909` `clap909` `hat909` `ohat909` |
 | 打擊 | `shaker` `tamb` `woodblock` `clave` `anvil` `gong` `chain` `snap` `brush` `drip` `thunder` `thunderclap` |
-| 環境音與效果 | `wind` `sea` `fire` `crickets` `rain` `void` `cave` `birds` `riser` |
+| 環境音與效果 | `wind` `sea` `fire` `crickets` `rain` `void` `cave` `birds` `riser` `downlifter` `impact` |
 
 它們是怎麼做的：
 
@@ -203,6 +205,8 @@ Jukebox 會在第一次使用時建立 `AudioContext`，並在第一次點擊、
 - **管樂與銅管**：把嘴唇、簧片或氣流建模成一個閥門（正弦波通過非線性曲線），所以音色會像真的樂器一樣隨力度變亮：小聲的小號柔和、大聲的嘹亮，單簧管低音區以奇次泛音為主，薩克斯風吹得用力時會帶點沙啞。管身與喇叭口用濾波器和共振峰表現；聲部裡的每位演奏者進來的時間差幾毫秒、音準差幾音分。
 - **人聲**：共振峰（合唱真的在唱母音）、氣音和每個音各自的顫音。
 - **鼓**：鼓皮用圓形薄膜的振動模態計算，敲擊後音高會從略高處滑落，並帶有鼓棒或鼓槌的撞擊聲；定音鼓的音高來自鼓腔內空氣把模態推成約 1 : 1.5 : 2 : 2.5 : 3；鈸的「刷」聲在敲擊後由低往高擴散，高頻先消失；敲得越輕越暗；每種鼓有隨機變體，連打不會像機關槍。
+- **合成器**：類比減法合成。振盪器自由運轉（每個音從波形的隨機位置開始，音準偏差一兩音分），送進四極低通濾波器（24 dB/oct，像電晶體梯形濾波器），截止頻率跟著音高走，濾波包絡彈得越用力開得越大。`supersaw` 依 Adam Szabo 對 Roland JP-8000 的量測重現（七個鋸齒波，照原機的走音與混音曲線，並在基頻處高通）；`synthLead` 是 Minimoog 風格的主奏，`pluck` 是 trance 琶音的撥音，`warmPad` 與 `darkPad` 是 Juno 風格帶合唱效果的墊音。`acid` 是 TB-303（`!` 重音、`>` 滑音），`reese` 是翻滾的走音低音，`bass808` 是會滑音的 808；低音在 120 Hz 以下都維持單聲道。`cut`、`q`、`env`、`detune`、`attack`、`release`、`glide` 可以調整每種音色。
+- **電子鼓**：依 Roland 鼓機建模，並對照錄音擬合。808 大鼓是橋式 T 型共振器，敲擊瞬間音高會短暫上揚；909 大鼓是帶快速音高包絡與雜訊敲擊聲的振盪器；拍手是相隔約 11 毫秒的三次雜訊加上一段殘響尾巴；909 腳踏鈸和原機的記憶體一樣是 6 位元，閉合的腳踏鈸會切斷還在響的開放腳踏鈸。`bigKick` 是現代分層的 EDM 大鼓：音高急墜的衝擊、削波的超低音和高頻敲擊聲。給大鼓一個音高就能配合歌曲調音（`rhythm('X...X...X...X...', { pitch: 'F1' })`）；`riser` 與 `downlifter` 的長度等於音符長度，所以 `melody('C4:128')` 就是八小節的推升。
 - **空間**：每首歌有自己程式產生的捲積殘響。
 
 自訂樂器：
