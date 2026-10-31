@@ -136,18 +136,25 @@ const AMBIENCE = Object.fromEntries(
   ]),
 ) as Record<keyof typeof AMB, SampledInstrument>;
 
-/** Volume of live-synthesized instruments (roughly aligned with the sampled instruments) */
+/**
+ * Volume of live-synthesized instruments (roughly aligned with the sampled instruments). The synthesizers were measured dry (EBU R128, a four-bar
+ * phrase at normal velocity) and set so a lead line sits about 1 dB below the piano playing it (-28 LUFS), four-note chords at about -27, bass
+ * lines at about -30 and the 808 at -28 (its weight is below what loudness meters weigh).
+ */
 const LIVE_LEVEL: Partial<Record<keyof typeof VOICES, number>> = {
   flute: 0.7, panflute: 0.7, ocarina: 0.7, whistle: 0.7,
   oboe: 1.4, bassoon: 1.4, sax: 1, tenorSax: 1, trumpet: 1.3, trombone: 1.1,
   choir: 0.36, choirO: 0.3, choirOo: 0.26, menChoir: 0.37, chant: 0.31, soprano: 0.55,
   throat: 0.6, organ: 1.2, organFull: 1.2, accordion: 1.4, drone: 2,
-  warmPad: 1.3, darkPad: 1.3, airPad: 5, synthLead: 1.4, powerGtr: 1.4, muteGtr: 1.4,
-  bass: 0.5, synthBass: 0.5, sub: 0.5, distBass: 0.7,
+  supersaw: 1.2, synthLead: 0.86, pluck: 1.9, warmPad: 1.77, darkPad: 1.65, airPad: 5, powerGtr: 1.4, muteGtr: 1.4,
+  bass: 0.5, synthBass: 0.78, reese: 0.42, acid: 0.77, bass808: 0.62, sub: 0.5, distBass: 0.83,
 };
 
 /** Live instruments that can glide between notes */
-const LIVE_GLIDERS = new Set<string>(['flute', 'panflute', 'ocarina', 'whistle', 'clarinet', 'oboe', 'bassoon', 'sax', 'tenorSax', 'horn', 'trumpet', 'trombone', 'soprano', 'synthLead', 'synthBass', 'sub']);
+const LIVE_GLIDERS = new Set<string>([
+  'flute', 'panflute', 'ocarina', 'whistle', 'clarinet', 'oboe', 'bassoon', 'sax', 'tenorSax', 'horn', 'trumpet', 'trombone', 'soprano',
+  'supersaw', 'synthLead', 'synthBass', 'reese', 'acid', 'bass808', 'sub', 'distBass',
+]);
 /** Bowed instruments that can glide between notes */
 const BOWED_GLIDERS = new Set<string>(['violin', 'cello', 'fiddle', 'morin', 'strings']);
 

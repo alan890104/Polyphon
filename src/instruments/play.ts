@@ -26,7 +26,7 @@ export function playNote(name: string, c: NoteCall): void {
   const def = getInstrument(name);
   const amp = Math.pow(c.vel, 1.4) * def.level;
   if (def.kind === 'live') {
-    def.voice({ ctx: c.ctx, out: c.out, t: c.t, dur: c.dur, f: midiToFrequency(c.m), vel: amp, bends: c.bends?.map(([at, m]) => [at, midiToFrequency(m)]), o: c.params ?? {} });
+    def.voice({ ctx: c.ctx, out: c.out, t: c.t, dur: c.dur, f: midiToFrequency(c.m), vel: amp, touch: c.vel, bends: c.bends?.map(([at, m]) => [at, midiToFrequency(m)]), o: c.params ?? {} });
     return;
   }
   if (def.bow) {

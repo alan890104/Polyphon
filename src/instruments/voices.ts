@@ -1,4 +1,5 @@
-// Live-synthesized sustained instruments: flutes, reeds, saxophones, brass, choir, organ, accordion, throat singing (khoomei), chord pad, bass, distorted guitar, ambience.
+// Live-synthesized sustained instruments: flutes, reeds, saxophones, brass, choir, organ, accordion, throat singing (khoomei), synthesizers
+// (supersaw, leads, plucks, pads, basses), distorted guitar, ambience.
 // Each note builds a small graph of Web Audio nodes; sampled instruments (plucked strings, bells, drums) are rendered offline in dsp/ instead.
 
 import { rng } from './dsp/core.ts';
@@ -10,7 +11,10 @@ export interface VoiceCall {
   /** Note length (seconds) */
   dur: number;
   f: number;
+  /** Loudness: the velocity through a curve, times the instrument's level */
   vel: number;
+  /** The velocity as played (0-1), for timbre: how far a filter opens, whether a note is accented */
+  touch: number;
   /** Glide: [seconds from the start, target frequency] */
   bends?: [number, number][];
   /** Instrument parameters (a song's track.params can override them) */
@@ -22,17 +26,21 @@ export type Voice = (c: VoiceCall) => void;
 // ───────────────────────── Shared parts ─────────────────────────
 
 const waves = new WeakMap<BaseAudioContext, Map<string, PeriodicWave>>();
-/** A periodic wave from a custom harmonic table (organ, accordion) */
-function wave(ctx: BaseAudioContext, key: string, amps: number[]): PeriodicWave {
+/** A periodic wave from a custom harmonic table (organ, accordion), starting `phase` (a fraction of a cycle) into it */
+function wave(ctx: BaseAudioContext, key: string, amps: number[], phase = 0): PeriodicWave {
   let m = waves.get(ctx);
   if (!m) waves.set(ctx, (m = new Map()));
-  let w = m.get(key);
+  const k = phase ? `${key}@${phase}` : key;
+  let w = m.get(k);
   if (!w) {
     const real = new Float32Array(amps.length + 1);
     const imag = new Float32Array(amps.length + 1);
-    amps.forEach((a, i) => (imag[i + 1] = a));
+    amps.forEach((a, i) => {
+      real[i + 1] = a * Math.sin(2 * Math.PI * (i + 1) * phase);
+      imag[i + 1] = a * Math.cos(2 * Math.PI * (i + 1) * phase);
+    });
     w = ctx.createPeriodicWave(real, imag);
-    m.set(key, w);
+    m.set(k, w);
   }
   return w;
 }
@@ -598,72 +606,33 @@ const drone: Voice = (c) => {
 };
 
 // ───────────────────────── Synthesizers ─────────────────────────
+//
+// Subtractive synthesis as analog polysynths do it. The oscillators run free: each note starts them at a random point of their cycle and a cent
+// or two off pitch, so repeated notes are never quite the same. The filter is a four-pole low-pass (24 dB/oct, like a Moog or Roland transistor
+// ladder) whose cutoff follows the keyboard and whose envelope sweeps it in octaves, as an exponential converter does, opening further the harder
+// a note is played. A stereo voice is two channel strips, left and right, each a mono filter and amplifier.
+// Every note unplugs itself from its destination when it ends: Chrome keeps processing a finished note's nodes for as long as they stay connected
+// (until garbage collection reaches them), and a song that left its notes plugged in grew heavier with every note (ten times the CPU by bar 16).
 
-/** Chord pad: kind 0 warm (sawtooth low-pass), 1 glass (sine + FM sparkle), 2 dark (very low low-pass + sub-bass), 3 air (narrow-band noise) */
-function padV(kind: 0 | 1 | 2 | 3): Voice {
-  return (c) => {
-    const { ctx, t, f, vel, o } = c;
-    const g = gainNode(ctx, 0);
-    const end = adsr(g, t, c.dur, vel * (kind === 3 ? 0.9 : kind === 1 ? 0.16 : 0.1), o.attack ?? 0.9, 0, 1, o.release ?? 1.2);
-    g.connect(c.out);
-    if (kind === 3) {
-      const n = noiseSrc(ctx, t, end);
-      const bp = filt(ctx, 'bandpass', f, 60);
-      const bp2 = filt(ctx, 'bandpass', f * 2, 60);
-      n.connect(bp).connect(gainNode(ctx, 1.2)).connect(g);
-      n.connect(bp2).connect(gainNode(ctx, 0.5)).connect(g);
-      return;
-    }
-    if (kind === 1) {
-      const s = osc(ctx, 'sine', f, t, end);
-      const m = osc(ctx, 'sine', f * 2.001, t, end);
-      const mg = gainNode(ctx, f * 0.6);
-      m.connect(mg).connect(s.frequency);
-      const sh = osc(ctx, 'sine', f * 4, t, end, 6);
-      s.connect(panned(ctx, g, -0.3));
-      sh.connect(gainNode(ctx, 0.12)).connect(panned(ctx, g, 0.3));
-      // A slowly breathing brightness
-      const l = osc(ctx, 'sine', 0.18 + Math.random() * 0.1, t, end);
-      l.connect(gainNode(ctx, f * 0.4)).connect(mg.gain);
-      return;
-    }
-    const cut = kind === 2 ? 520 : o.cut ?? 1300;
-    const lp = filt(ctx, 'lowpass', cut, 0.8);
-    lp.connect(g);
-    // The filter slowly opens and closes
-    const l = osc(ctx, 'sine', 0.12 + Math.random() * 0.08, t, end);
-    l.connect(gainNode(ctx, cut * 0.35)).connect(lp.frequency);
-    for (const [d, p] of [[-11, -0.6], [0, 0], [11, 0.6]] as const) osc(ctx, 'sawtooth', f, t, end, d).connect(panned(ctx, lp, p));
-    if (kind === 2) osc(ctx, 'sine', f / 2, t, end).connect(gainNode(ctx, 0.6)).connect(g);
-  };
+const SAW = harmonics(1024, 1);
+const SQUARE = harmonics(1024, 1, 0);
+
+/** An oscillator that runs free: it starts at one of 16 points of its cycle and up to `wobble` cents off pitch, both at random */
+function vco(ctx: BaseAudioContext, kind: 'saw' | 'square', f: number, t: number, end: number, cents = 0, wobble = 2): OscillatorNode {
+  const phase = Math.floor(Math.random() * 16) / 16;
+  return osc(ctx, wave(ctx, kind, kind === 'saw' ? SAW : SQUARE, phase), f, t, end, cents + (Math.random() - 0.5) * 2 * wobble);
 }
 
-/** Glass harmonica: two nearly unison sines beat against each other, slow attack */
-const glass: Voice = (c) => {
-  const { ctx, t, f, vel, o } = c;
-  const g = gainNode(ctx, 0);
-  const end = adsr(g, t, c.dur, vel * 0.22, o.attack ?? 0.18, 0.5, 0.7, o.release ?? 0.8);
-  g.connect(c.out);
-  osc(ctx, 'sine', f, t, end).connect(panned(ctx, g, -0.25));
-  osc(ctx, 'sine', f, t, end, 7).connect(panned(ctx, g, 0.25));
-  osc(ctx, 'sine', f * 2, t, end, 3).connect(gainNode(ctx, 0.18)).connect(g);
-};
+/** A four-pole low-pass (24 dB/oct, like a transistor ladder): a gentle biquad into one carrying the resonance q (dB) */
+function ladder(ctx: BaseAudioContext, cut: number, q: number): [BiquadFilterNode, BiquadFilterNode] {
+  const a = filt(ctx, 'lowpass', cut, -5.4);
+  const b = filt(ctx, 'lowpass', cut, q);
+  a.connect(b);
+  return [a, b];
+}
 
-/** Synth lead: sawtooth + square, low-pass, glide and vibrato */
-const synthLead: Voice = (c) => {
-  const { ctx, t, f, vel, o } = c;
-  const g = gainNode(ctx, 0);
-  const end = adsr(g, t, c.dur, vel * 0.12, o.attack ?? 0.01, 0.2, 0.75, o.release ?? 0.1);
-  const lp = filt(ctx, 'lowpass', o.cut ?? 3200, 2);
-  lp.connect(g).connect(c.out);
-  const s1 = osc(ctx, 'sawtooth', f, t, end, -6);
-  const s2 = osc(ctx, 'square', f, t, end, 6);
-  s1.connect(lp);
-  s2.connect(gainNode(ctx, 0.6)).connect(lp);
-  vibrato(ctx, [s1.detune, s2.detune], t, end, 5.8, o.vib ?? 14, 0.2);
-  applyBends(s1.frequency, c, 1, o.glide ?? 0.05);
-  applyBends(s2.frequency, c, 1, o.glide ?? 0.05);
-};
+/** A cutoff that follows the keyboard: cut (Hz) at the pitch ref, moving `track` octaves for every octave played */
+const keyCut = (cut: number, f: number, ref: number, track = 0.5): number => Math.min(20000, cut * Math.pow(f / ref, track));
 
 /** Overdrive curve (each computed only once) */
 const curves = new Map<string, Float32Array<ArrayBuffer>>();
@@ -678,6 +647,234 @@ function tanhCurve(drive: number, n: number, norm = true): Float32Array<ArrayBuf
   return c;
 }
 
+/** Soft clipping (tanh) at the given drive, keeping a full-scale peak at full scale: 1 rounds the peaks, 4 is a crunchy overdrive */
+function saturator(ctx: BaseAudioContext, drive: number): WaveShaperNode {
+  const ws = ctx.createWaveShaper();
+  ws.curve = tanhCurve(drive, 1024);
+  return ws;
+}
+
+interface StripSpec {
+  /** -1 left, 0 centre, 1 right */
+  pan: number;
+  /** Level of the oscillators coming in */
+  level: number;
+  /** Low-pass cutoff (Hz) and resonance (dB) */
+  cut: number;
+  q: number;
+  /** Soft clipping after the filter, at this drive */
+  drive?: number;
+  /** A high-pass (Hz) after that */
+  hp?: number;
+}
+
+interface Strip {
+  /** Where the oscillators go */
+  input: GainNode;
+  /** The low-pass's two stages, for sweep */
+  lp: BiquadFilterNode[];
+  /** The amplifier, for amps */
+  amp: GainNode;
+  /** The node plugged into the destination, for unplug */
+  out: AudioNode;
+}
+
+/** One channel strip of a synth voice, mono from end to end: input level, four-pole low-pass, soft clipping and high-pass if asked, amplifier, pan */
+function strip(ctx: BaseAudioContext, out: AudioNode, s: StripSpec): Strip {
+  const input = gainNode(ctx, s.level);
+  const lp = ladder(ctx, s.cut, s.q);
+  const amp = gainNode(ctx, 0);
+  let node: AudioNode = input.connect(lp[0]).connect(lp[1]);
+  if (s.drive) node = node.connect(saturator(ctx, s.drive));
+  if (s.hp) node = node.connect(filt(ctx, 'highpass', s.hp, -3));
+  const pan = panned(ctx, out, s.pan);
+  node.connect(amp).connect(pan);
+  return { input, lp, amp, out: pan === out ? amp : pan };
+}
+
+/** A stereo voice's strips, left and right */
+const stereo = (ctx: BaseAudioContext, out: AudioNode, s: Omit<StripSpec, 'pan'>): Strip[] => [-1, 1].map((pan) => strip(ctx, out, { ...s, pan }));
+
+/** The amplifier envelope (adsr) on every strip; returns when the sound ends */
+function amps(strips: Strip[], t: number, dur: number, peak: number, a: number, d: number, s: number, r: number): number {
+  let end = t;
+  for (const st of strips) end = adsr(st.amp, t, dur, peak, a, d, s, r);
+  return end;
+}
+
+/** Filter envelope on every strip, in octaves on the filters' detune: up oct octaves over att seconds, then back toward sus of that with time constant dec */
+function sweep(strips: Strip[], t: number, oct: number, att: number, dec: number, sus = 0): void {
+  for (const { lp } of strips) {
+    for (const { detune: p } of lp) {
+      p.setValueAtTime(0, t);
+      p.linearRampToValueAtTime(oct * 1200, t + att);
+      p.setTargetAtTime(oct * 1200 * sus, t + att, dec);
+    }
+  }
+}
+
+/** Unplug a note's nodes from its destination once its oscillator src has stopped (see above) */
+function unplug(src: AudioScheduledSourceNode, nodes: AudioNode[]): void {
+  src.onended = () => {
+    for (const n of nodes) n.disconnect();
+  };
+}
+
+/** A gain feeding every strip: the centre of a stereo voice */
+function centre(ctx: BaseAudioContext, strips: Strip[], level: number): GainNode {
+  const g = gainNode(ctx, level);
+  for (const s of strips) g.connect(s.input);
+  return g;
+}
+
+/** The JP-8000's six side saws: how far each sits from the pitch at full Detune, as a fraction of it (Szabo's measurements) */
+const SUPERSAW = [-0.11002313, -0.06288439, -0.01952356, 0.01991221, 0.06216538, 0.10745242];
+/** Szabo's fit of the Detune knob (0-1) to the amount of detune, highest power first: gentle over most of the travel, steep at the top */
+const SUPERSAW_DETUNE = [10028.7312891634, -50818.8652045924, 111363.4808729368, -138150.6761080548, 106649.6679158292, -53046.9642751875, 17019.951858008, -3425.0836591318, 404.2703938388, -24.1878824391, 0.6717417634, 0.0030115596];
+
+/**
+ * Supersaw (Roland JP-8000), after Adam Szabo's measurements ("How to Emulate the Super Saw", 2010): seven free-running saws, the six side ones
+ * detuned along the knob's curve and coming up as the centre one fades (Mix), and a high-pass at the fundamental that keeps the stack from turning
+ * to mud. The side saws alternate left and right (each side gets flat and sharp ones), through a four-pole low-pass with a short sweep for bite.
+ * Trance leads and big-room chord stabs. o.detune 0-1 (default 0.6), o.mix 0-1 (default 0.75), o.cut (Hz around C5, default 7000), o.q, o.attack, o.release, o.glide, o.vib.
+ */
+const supersaw: Voice = (c) => {
+  const { ctx, t, f, vel, touch, o } = c;
+  const x = Math.min(1, Math.max(0, o.detune ?? 0.6));
+  const amount = SUPERSAW_DETUNE.reduce((a, k) => a * x + k, 0);
+  const mix = Math.min(1, Math.max(0, o.mix ?? 0.75));
+  const mid = 0.99785 - 0.55366 * mix;
+  const side = -0.73764 * mix * mix + 1.2841 * mix + 0.044372;
+  // Each side hears the centre saw and three side ones: hold its power whatever the mix
+  const level = side / Math.sqrt(mid * mid + 3 * side * side);
+  const S = stereo(ctx, c.out, { level, cut: keyCut(o.cut ?? 7000, f, 523), q: o.q ?? 0, hp: f });
+  const end = amps(S, t, c.dur, vel * 0.2, o.attack ?? 0.003, 0.5, 0.7, o.release ?? 0.25);
+  sweep(S, t, 1.5 * touch, 0.003, 0.15);
+  const middle = centre(ctx, S, mid / side);
+  const saws = [0, ...SUPERSAW].map((r, i) => {
+    const s = vco(ctx, 'saw', f, t, end, 1200 * Math.log2(1 + r * amount), 1);
+    s.connect(i ? S[i % 2].input : middle);
+    applyBends(s.frequency, c, 1, o.glide ?? 0.08);
+    return s;
+  });
+  vibrato(ctx, saws.map((s) => s.detune), t, end, 5.5, o.vib ?? 0, 0.25);
+  unplug(saws[0], S.map((s) => s.out));
+};
+
+/**
+ * Synth lead, a Minimoog-style monosynth voice: a saw in the centre and two more a few cents either side (left and right) over a square an octave
+ * down, a four-pole low-pass whose envelope opens further the harder a note is played, a soft-clipping output stage, a slow analog drift, glide
+ * and a delayed vibrato. o.cut (Hz around C5, default 3200), o.q (resonance dB, default 3), o.env (filter decay s, default 0.25), o.vib (cents, default 12), o.attack, o.release, o.glide.
+ */
+const synthLead: Voice = (c) => {
+  const { ctx, t, f, vel, touch, o } = c;
+  const S = stereo(ctx, c.out, { level: 0.3, cut: keyCut(o.cut ?? 3200, f, 523), q: o.q ?? 3, drive: 2 });
+  const end = amps(S, t, c.dur, vel * 0.3, o.attack ?? 0.005, 0.3, 0.8, o.release ?? 0.12);
+  sweep(S, t, 1 + 1.5 * touch, 0.004, o.env ?? 0.25);
+  const middle = centre(ctx, S, 1.3);
+  const oscs = [vco(ctx, 'saw', f, t, end), vco(ctx, 'square', f, t, end, -1200), vco(ctx, 'saw', f, t, end, -8), vco(ctx, 'saw', f, t, end, 8)];
+  oscs[0].connect(middle);
+  oscs[1].connect(gainNode(ctx, 0.4)).connect(middle);
+  oscs[2].connect(S[0].input);
+  oscs[3].connect(S[1].input);
+  vibrato(ctx, oscs.map((s) => s.detune), t, end, 5.6, o.vib ?? 12, 0.3);
+  vibrato(ctx, [oscs[2].detune, oscs[3].detune], t, end, 0.1 + Math.random() * 0.3, 3, 0);
+  for (const s of oscs) applyBends(s.frequency, c, 1, o.glide ?? 0.06);
+  unplug(oscs[0], S.map((s) => s.out));
+};
+
+/**
+ * Pluck, the short bright notes of trance and house arpeggios: three saws (centre, a few cents flat left and sharp right) into a four-pole low-pass
+ * whose envelope snaps shut, harder notes opening it further, and an amplifier that dies away with no sustain.
+ * o.cut (Hz the filter closes to, around C5, default 500), o.env (filter decay s, default 0.1), o.q (resonance dB, default 5), o.release (default 0.3).
+ */
+const pluck: Voice = (c) => {
+  const { ctx, t, f, vel, touch, o } = c;
+  const S = stereo(ctx, c.out, { level: 0.35, cut: keyCut(o.cut ?? 500, f, 523, 0.8), q: o.q ?? 5 });
+  const end = amps(S, t, c.dur, vel * 0.3, 0.002, 0.7, 0, o.release ?? 0.3);
+  sweep(S, t, 2.5 + 2 * touch, 0.002, o.env ?? 0.1);
+  const mid = vco(ctx, 'saw', f, t, end);
+  mid.connect(centre(ctx, S, 1.3));
+  vco(ctx, 'saw', f, t, end, -10).connect(S[0].input);
+  vco(ctx, 'saw', f, t, end, 10).connect(S[1].input);
+  unplug(mid, S.map((s) => s.out));
+};
+
+/**
+ * Analog pad in the manner of a Juno-60: a saw in the centre and two more left and right whose pitch one slow triangle sweeps in opposite
+ * directions (what the Juno's bucket-brigade chorus does to its delayed copies, about ±7 cents), into a four-pole low-pass that breathes
+ * slowly around its cutoff. cut: the cutoff (Hz at middle C); sub: the level of a sine an octave down. o.cut, o.attack (default 0.9), o.release (default 1.2).
+ */
+function analogPad(cut: number, sub: number): Voice {
+  return (c) => {
+    const { ctx, t, f, vel, o } = c;
+    const S = stereo(ctx, c.out, { level: 0.4, cut: keyCut(o.cut ?? cut, f, 262), q: 1 });
+    const end = amps(S, t, c.dur, vel * 0.2, o.attack ?? 0.9, 0, 1, o.release ?? 1.2);
+    const mid = vco(ctx, 'saw', f, t, end);
+    mid.connect(centre(ctx, S, 1));
+    unplug(mid, S.map((s) => s.out));
+    const [left, right] = [vco(ctx, 'saw', f, t, end, -4), vco(ctx, 'saw', f, t, end, 4)];
+    left.connect(S[0].input);
+    right.connect(S[1].input);
+    const chorus = osc(ctx, 'triangle', 0.5 + Math.random() * 0.4, t, end);
+    chorus.connect(gainNode(ctx, 7)).connect(left.detune);
+    chorus.connect(gainNode(ctx, -7)).connect(right.detune);
+    // Breathing: the cutoff drifts a third of an octave either way
+    const breath = gainNode(ctx, 400);
+    osc(ctx, 'sine', 0.08 + Math.random() * 0.08, t, end).connect(breath);
+    for (const s of S) for (const { detune } of s.lp) breath.connect(detune);
+    if (sub) {
+      const s = osc(ctx, 'sine', f / 2, t, end).connect(gainNode(ctx, sub * 0.4));
+      for (const st of S) s.connect(st.amp);
+    }
+  };
+}
+
+/** Glass pad: a sine frequency-modulated by its octave, its brightness breathing slowly, and a shimmer two octaves up on the right */
+const glassPad: Voice = (c) => {
+  const { ctx, t, f, vel, o } = c;
+  const g = gainNode(ctx, 0);
+  const end = adsr(g, t, c.dur, vel * 0.16, o.attack ?? 0.9, 0, 1, o.release ?? 1.2);
+  g.connect(c.out);
+  const s = osc(ctx, 'sine', f, t, end);
+  const m = osc(ctx, 'sine', f * 2.001, t, end);
+  const mg = gainNode(ctx, f * 0.6);
+  m.connect(mg).connect(s.frequency);
+  const sh = osc(ctx, 'sine', f * 4, t, end, 6);
+  s.connect(panned(ctx, g, -0.3));
+  sh.connect(gainNode(ctx, 0.12)).connect(panned(ctx, g, 0.3));
+  osc(ctx, 'sine', 0.18 + Math.random() * 0.1, t, end).connect(gainNode(ctx, f * 0.4)).connect(mg.gain);
+  unplug(s, [g]);
+};
+
+/** Air pad: noise through narrow band-passes at the note and its octave, a different stretch of noise on each side */
+const airPad: Voice = (c) => {
+  const { ctx, t, f, vel, o } = c;
+  for (const pan of [-1, 1]) {
+    const g = gainNode(ctx, 0);
+    const end = adsr(g, t, c.dur, vel * 0.64, o.attack ?? 0.9, 0, 1, o.release ?? 1.2);
+    const side = panned(ctx, c.out, pan);
+    g.connect(side);
+    const n = noiseSrc(ctx, t, end);
+    n.connect(filt(ctx, 'bandpass', f, 60)).connect(gainNode(ctx, 1.2)).connect(g);
+    n.connect(filt(ctx, 'bandpass', f * 2, 60)).connect(gainNode(ctx, 0.5)).connect(g);
+    unplug(n, [side]);
+  }
+};
+
+/** Glass harmonica: two nearly unison sines beat against each other, slow attack */
+const glass: Voice = (c) => {
+  const { ctx, t, f, vel, o } = c;
+  const g = gainNode(ctx, 0);
+  const end = adsr(g, t, c.dur, vel * 0.22, o.attack ?? 0.18, 0.5, 0.7, o.release ?? 0.8);
+  g.connect(c.out);
+  const s = osc(ctx, 'sine', f, t, end);
+  s.connect(panned(ctx, g, -0.25));
+  osc(ctx, 'sine', f, t, end, 7).connect(panned(ctx, g, 0.25));
+  osc(ctx, 'sine', f * 2, t, end, 3).connect(gainNode(ctx, 0.18)).connect(g);
+  unplug(s, [g]);
+};
+
 /** Distorted guitar: root + fifth + octave into overdrive, then through a cabinet; o.mute=1 is palm muting */
 const powerGtr: Voice = (c) => {
   const { ctx, t, f, vel, o } = c;
@@ -691,10 +888,15 @@ const powerGtr: Voice = (c) => {
   const hp = filt(ctx, 'highpass', 90, 0.7);
   const mid = filt(ctx, 'peaking', 750, 1, -5);
   pre.connect(ws).connect(hp).connect(mid).connect(cab).connect(g).connect(c.out);
-  for (const [ratio, det] of [[1, -5], [1.5, 4], [2, 3], [1, 8]] as const) osc(ctx, 'sawtooth', f * ratio, t, end, det).connect(pre);
+  const saws = ([[1, -5], [1.5, 4], [2, 3], [1, 8]] as const).map(([ratio, det]) => osc(ctx, 'sawtooth', f * ratio, t, end, det));
+  for (const s of saws) s.connect(pre);
+  unplug(saws[0], [g]);
 };
 
 // ───────────────────────── Bass ─────────────────────────
+//
+// The synth basses are mono below 120 Hz (the reese's wide saws are high-passed above it, and a clean sine carries its bottom): a club system
+// needs one centred low end, and a phone speaker sums the two sides anyway.
 
 /** Fingerstyle bass: sine + triangle, a plucked-string low-pass envelope */
 const fingerBass: Voice = (c) => {
@@ -705,26 +907,92 @@ const fingerBass: Voice = (c) => {
   lp.frequency.setValueAtTime(900 + vel * 900, t);
   lp.frequency.setTargetAtTime(350, t, 0.12);
   lp.connect(g).connect(c.out);
-  osc(ctx, 'sine', f, t, end).connect(lp);
+  const s = osc(ctx, 'sine', f, t, end);
+  s.connect(lp);
   osc(ctx, 'triangle', f, t, end).connect(gainNode(ctx, 0.6)).connect(lp);
   osc(ctx, 'sawtooth', f, t, end).connect(gainNode(ctx, 0.12)).connect(lp);
+  unplug(s, [g]);
 };
 
-/** Synth bass: the envelope of a resonant low-pass goes "bwop" */
+/**
+ * Synth bass, the off-beat bass of house and trance: two saws a few cents apart and a square through a four-pole low-pass whose envelope goes
+ * "bwow" (harder notes open it further) and a soft clipper for weight, over a clean sine at the fundamental.
+ * o.cut (Hz the filter settles to at C2, following the keyboard; default 180), o.q (resonance dB, default 6), o.env (filter decay s, default 0.08), o.release, o.glide.
+ */
 const synthBass: Voice = (c) => {
+  const { ctx, t, f, vel, touch, o } = c;
+  const S = [strip(ctx, c.out, { pan: 0, level: 0.35, cut: keyCut(o.cut ?? 180, f, 65.4, 1), q: o.q ?? 6, drive: 2 })];
+  const end = amps(S, t, c.dur, vel * 0.5, 0.003, 0.3, 0.75, o.release ?? 0.06);
+  sweep(S, t, 2 + 2 * touch, 0.003, o.env ?? 0.08);
+  const oscs = [vco(ctx, 'saw', f, t, end, -6), vco(ctx, 'saw', f, t, end, 6), vco(ctx, 'square', f, t, end)];
+  for (const s of oscs) s.connect(S[0].input);
+  const sine = osc(ctx, 'sine', f, t, end);
+  sine.connect(gainNode(ctx, 0.5)).connect(S[0].amp);
+  for (const s of [...oscs, sine]) applyBends(s.frequency, c, 1, o.glide ?? 0.07);
+  unplug(sine, [S[0].out]);
+};
+
+/**
+ * Reese bass (after Kevin Saunderson's "Just Want Another Chance", 1988): saws detuned against each other, whose slowly drifting beats make the
+ * note churn. A close pair in the centre and a wider pair left and right, through a four-pole low-pass, soft clipping and a high-pass that leaves
+ * the bottom to a clean mono sine. o.detune (cents, default 16), o.cut (Hz, default 1600), o.q, o.attack, o.release, o.glide.
+ */
+const reese: Voice = (c) => {
   const { ctx, t, f, vel, o } = c;
-  const g = gainNode(ctx, 0);
-  const end = adsr(g, t, c.dur, vel * 0.32, 0.004, 0.3, 0.7, o.release ?? 0.06);
-  const lp = filt(ctx, 'lowpass', 200, o.q ?? 6);
-  lp.frequency.setValueAtTime(Math.min(6000, f * (6 + vel * 10)), t);
-  lp.frequency.setTargetAtTime(f * 2.2, t, o.env ?? 0.08);
-  lp.connect(g).connect(c.out);
-  osc(ctx, 'sawtooth', f, t, end, -4).connect(lp);
-  osc(ctx, 'sawtooth', f, t, end, 4).connect(lp);
-  osc(ctx, 'sine', f / 2, t, end).connect(gainNode(ctx, 0.8)).connect(g);
-  const s = osc(ctx, 'square', f, t, end);
-  s.connect(gainNode(ctx, 0.3)).connect(lp);
-  applyBends(s.frequency, c);
+  const d = o.detune ?? 16;
+  const S = stereo(ctx, c.out, { level: 0.3, cut: o.cut ?? 1600, q: o.q ?? 2, drive: 2.5, hp: 160 });
+  const end = amps(S, t, c.dur, vel * 0.5, o.attack ?? 0.01, 0.5, 0.85, o.release ?? 0.12);
+  const middle = centre(ctx, S, 1);
+  const saws = ([[-d / 3, middle], [d / 3, middle], [-d, S[0].input], [d, S[1].input]] as const).map(([cents, to]) => {
+    const s = vco(ctx, 'saw', f, t, end, cents);
+    s.connect(to);
+    return s;
+  });
+  // The beats drift: one saw of each pair wanders by a third of the detune
+  vibrato(ctx, [saws[0].detune, saws[2].detune], t, end, 0.15 + Math.random() * 0.2, d / 3, 0);
+  const sub = osc(ctx, 'sine', f, t, end);
+  const subLevel = gainNode(ctx, 0.6);
+  sub.connect(subLevel);
+  for (const s of S) subLevel.connect(s.amp);
+  for (const s of [...saws, sub]) applyBends(s.frequency, c, 1, o.glide ?? 0.08);
+  unplug(sub, S.map((s) => s.out));
+};
+
+/**
+ * Acid bass (Roland TB-303): one saw (o.square = 1: a square) into a resonant low-pass swept down from every note, with no keyboard tracking.
+ * An accented note (velocity above 0.9: ! in a melody) is louder and its sweep higher, shorter and rounded at the top (the 303's accent circuit),
+ * which sets the resonance squealing; a glide (>) slides into the next note in about 60 ms without restarting the envelopes, like the 303's
+ * Slide. Soft clipping on the output, as acid lines are usually overdriven, and the output's coupling high-pass.
+ * o.cut (Hz, default 300), o.q (resonance dB, default 15), o.env (filter decay s, default 0.3), o.square, o.glide, o.release.
+ */
+const acid: Voice = (c) => {
+  const { ctx, t, f, vel, touch, o } = c;
+  const accent = touch > 0.9;
+  const S = [strip(ctx, c.out, { pan: 0, level: 0.5, cut: o.cut ?? 300, q: o.q ?? 15, drive: 2.5, hp: 35 })];
+  const end = amps(S, t, c.dur, vel * (accent ? 0.4 : 0.3), 0.003, 1.5, 0.5, o.release ?? 0.02);
+  const dec = o.env ?? 0.3;
+  sweep(S, t, accent ? 3.5 : 2.5, accent ? 0.03 : 0.003, accent ? Math.min(dec, 0.12) : dec);
+  const s = vco(ctx, o.square ? 'square' : 'saw', f, t, end, 0, 1);
+  s.connect(S[0].input);
+  applyBends(s.frequency, c, 1, o.glide ?? 0.06);
+  unplug(s, [S[0].out]);
+};
+
+/**
+ * 808 bass: the Roland TR-808 bass drum played as a tuned bass, as in trap and future bass. A sine that starts an octave high and drops to pitch
+ * in about 40 ms (the punch), then a long slow decay, driven into a soft clipper whose third harmonic carries it on small speakers and fades as
+ * the note decays. Mono, with nothing below the fundamental. o.drive (default 2; 0.5 is nearly clean), o.glide (default 0.12), o.release.
+ */
+const bass808: Voice = (c) => {
+  const { ctx, t, f, vel, o } = c;
+  const env = gainNode(ctx, 0);
+  const end = adsr(env, t, c.dur, 1, 0.002, 2.5, 0.3, o.release ?? 0.15);
+  const s = osc(ctx, 'sine', 2 * f, t, end);
+  s.frequency.setTargetAtTime(f, t, 0.012);
+  applyBends(s.frequency, c, 1, o.glide ?? 0.12);
+  const out = gainNode(ctx, vel * 0.5);
+  s.connect(env).connect(saturator(ctx, o.drive ?? 2)).connect(out).connect(c.out);
+  unplug(s, [out]);
 };
 
 /** Sub-bass: a pure sine */
@@ -736,21 +1004,23 @@ const subBass: Voice = (c) => {
   const s = osc(ctx, 'sine', f, t, end);
   s.connect(g);
   applyBends(s.frequency, c);
+  unplug(s, [g]);
 };
 
-/** Distorted bass: sawtooth + square overdriven */
+/** Distorted bass: two saws and a square an octave down, overdriven, then a four-pole low-pass; a clean sine an octave down under it. o.cut (Hz, default 1400), o.q, o.release, o.glide */
 const distBass: Voice = (c) => {
   const { ctx, t, f, vel, o } = c;
-  const g = gainNode(ctx, 0);
-  const end = adsr(g, t, c.dur, vel * 0.26, 0.005, 0.3, 0.8, o.release ?? 0.06);
-  const ws = ctx.createWaveShaper();
-  ws.curve = tanhCurve(4, 512, false);
-  const lp = filt(ctx, 'lowpass', o.cut ?? 1400, 1.2);
-  const pre = gainNode(ctx, 0.6);
-  pre.connect(ws).connect(lp).connect(g).connect(c.out);
-  osc(ctx, 'sawtooth', f, t, end).connect(pre);
-  osc(ctx, 'square', f / 2, t, end).connect(pre);
-  osc(ctx, 'sine', f / 2, t, end).connect(gainNode(ctx, 0.6)).connect(g);
+  const S = [strip(ctx, c.out, { pan: 0, level: 1, cut: o.cut ?? 1400, q: o.q ?? 2 })];
+  const end = amps(S, t, c.dur, vel * 0.26, 0.005, 0.3, 0.8, o.release ?? 0.06);
+  const pre = gainNode(ctx, 0.45);
+  pre.connect(saturator(ctx, 4)).connect(S[0].input);
+  const oscs = [vco(ctx, 'saw', f, t, end, -6), vco(ctx, 'saw', f, t, end, 6), vco(ctx, 'square', f, t, end, -1200)];
+  for (const s of oscs) s.connect(pre);
+  const sine = osc(ctx, 'sine', f / 2, t, end);
+  sine.connect(gainNode(ctx, 0.6)).connect(S[0].amp);
+  for (const s of oscs) applyBends(s.frequency, c, 1, o.glide ?? 0.07);
+  applyBends(sine.frequency, c, 0.5, o.glide ?? 0.07);
+  unplug(sine, [S[0].out]);
 };
 
 // ───────────────────────── Ambience ─────────────────────────
@@ -874,16 +1144,22 @@ export const VOICES = {
   organFull: (c) => organ({ ...c, o: { full: 1, ...c.o } }),
   accordion,
   drone,
-  warmPad: padV(0),
-  glassPad: padV(1),
-  darkPad: padV(2),
-  airPad: padV(3),
+  warmPad: analogPad(1300, 0),
+  glassPad,
+  /** Dark pad: the analog pad nearly closed, over a sine an octave down */
+  darkPad: analogPad(700, 0.6),
+  airPad,
   glass,
+  supersaw,
   synthLead,
+  pluck,
   powerGtr,
   muteGtr: (c) => powerGtr({ ...c, o: { mute: 1, ...c.o } }),
   bass: fingerBass,
   synthBass,
+  reese,
+  acid,
+  bass808,
   sub: subBass,
   distBass,
   birds,
