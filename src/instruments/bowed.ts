@@ -12,6 +12,8 @@
 //     above 1 kHz the modes were too few and too broad for the vibrato to make the partials flicker (2-3 dB, real violins 5-15 dB) (bodyModes);
 //   - a corner fixed in hertz left the low strings as bright as the high ones (bowTable);
 //   - between the partials the noise floor was 6-14 dB cleaner than the recordings (bow noise raised, and rounded off with the tone).
+// Measured again on the cello's A string (A3 up), where the solo cello sounded like a synthesizer: one bowing for every string left it dull
+// and hissy there; the top string now has its own bowing point, corner and noise (TopString, CELLO_A).
 //
 // The sample has two parts: the attack (the bow grips the string, the vibrato comes in and grows) and a sustain section that can loop seamlessly.
 // All the modulation in the sustain section (vibrato, intonation drift, bow-pressure swell, bow noise) has the loop length as its period,
@@ -71,6 +73,20 @@ export interface BowDef {
   body: BodyDef;
   /** Loop section length (seconds); a solo's is adjusted to hold a whole number of its vibrato cycles */
   loop: number;
+  /** The top string, where it is unlike the others (see topString); notes from its open pitch up are played on it */
+  top?: TopString;
+}
+
+/**
+ * The top string's own bowing: its open pitch (Hz); the bowing point as a fraction of the open string (the bow keeps its distance from the
+ * bridge as a finger shortens the string, so a stopped note's bowing point is that times f / open, and the comb's notches stay put in hertz);
+ * and its corner and bow noise as factors of the other strings'
+ */
+export interface TopString {
+  open: number;
+  beta: number;
+  corner: number;
+  noise: number;
 }
 
 export interface Bowed {
@@ -313,12 +329,21 @@ function firstDesk(sr: number, f: number, d: BowDef, loud: boolean, seed: number
   return { mean: Math.round(f * meanRatio(centsOf(p), L) * L) / L, vph: p.vph, rate };
 }
 
+/** A note from the top string's open pitch up is played on it (a quarter tone of slack, so its open note's sample counts): its bowing */
+function topString(d: BowDef, f: number): BowDef {
+  const s = d.top;
+  if (!s || f < s.open * 0.97) return d;
+  const beta = s.beta * (f / s.open);
+  return { ...d, beta: [beta, beta], corner: [d.corner[0] * s.corner, d.corner[1] * s.corner], noise: d.noise * s.noise };
+}
+
 /**
  * Compute one bowed-string sample. f is the pitch (Hz), loud decides bow pressure (brightness, bow noise, attack), and seed makes the players different for every note.
  * desk picks the players (see DESKS): 0 is the first desk.
  * The returned sample can loop seamlessly across the loop interval.
  */
 export function bowSample(sr: number, f: number, d: BowDef, loud: boolean, seed: number, desk = 0): Bowed {
+  d = topString(d, f);
   const dk = DESKS[desk % DESKS.length];
   let r = rng(seed * 7919 + Math.round(f * 13));
   const P = d.players;
@@ -565,6 +590,18 @@ const FIDDLE_BODY: BodyDef = { seed: 53, lo: 220, hi: 10000, density: 9, q: [36,
 /** Morin khuur (horsehead fiddle): a skin-covered square body, a 900 Hz nasal tone, few highs */
 const MORIN_BODY: BodyDef = { seed: 67, lo: 150, hi: 7000, density: 7, q: [26, 40], rand: 6, env: [[150, -12], [240, 1], [400, -2], [900, 6], [1300, 0], [1700, -3], [2400, 0], [3500, -5], [5000, -9], [7000, -16]] };
 
+/**
+ * The cello's A string, fitted to the Iowa A-string notes A3-F#4 (arco mf and ff). Bowed like the lower strings (a comb notch every 8.3
+ * partials, the corner at 16, the same bow noise), the solo cello from A3 up had 5 dB too much of its energy in the fundamental and 8 dB too
+ * little at 2-4 kHz (spectral centroid 910 Hz, the recordings 1390), and 10-20 dB more hiss between its partials (at 1-2 kHz 29 dB under them,
+ * the recordings 43): a dull tone with a layer of hiss over it, like a synthesizer's strings; the low register measures close to the C and
+ * G strings. Bowed 3.5 cm from the bridge (5% of the open string) the comb's first notch sits near 4.4 kHz on every note of the string, so
+ * the partials run strong up to the bridge hill and fall past it, as in the recordings; the steel string loses less per period than the
+ * wound ones (a corner twice as high) and bows cleaner (a third of the noise). Now: centroid 1420 Hz, 2-4 kHz at -8 dB of the total
+ * (recordings -7), and the noise between partials 43, 35 and 26 dB under them at 1-2, 2-4 and 4-8 kHz (recordings 43, 35, 27)
+ */
+const CELLO_A: TopString = { open: 220, beta: 0.05, corner: 2, noise: 0.3 };
+
 const section = (body: BodyDef, players: number): BowDef => ({
   players,
   spread: 9,
@@ -607,7 +644,7 @@ export const BOWS = {
   /** The slow version of the string section (soft, long): the same samples */
   strPad: { def: section(SECTION_BODY, 7), zone: 3, rate: 0.75, attack: 0.6, release: 0.9, loudAt: 2, glide: 0.09, level: 0.81, share: 'strings' },
   violin: { def: solo(VIOLIN_BODY, 6.2, 27, 0.113, [8, 16], 0.1), zone: 3, rate: 0.75, attack: 0.02, release: 0.25, loudAt: 0.72, glide: 0.09, level: 0.57 },
-  cello: { def: solo(CELLO_BODY, 5.6, 24, 0.12, [8, 16], 0.2), zone: 3, rate: 0.5, attack: 0.02, release: 0.3, loudAt: 0.72, glide: 0.09, level: 0.66 },
+  cello: { def: { ...solo(CELLO_BODY, 5.6, 24, 0.12, [8, 16], 0.2), top: CELLO_A }, zone: 3, rate: 0.5, attack: 0.02, release: 0.3, loudAt: 0.72, glide: 0.09, level: 0.66 },
   /** Folk fiddle: brighter, with a faster, narrower vibrato that comes in later */
   fiddle: { def: { ...solo(FIDDLE_BODY, 6.2, 12, 0.09, [11, 22], 0.12), vibDelay: 0.18 }, zone: 3, rate: 0.75, attack: 0.015, release: 0.2, loudAt: 0.72, glide: 0.07, level: 0.6 },
   /** Morin khuur: horsehair bow, lots of breath noise, wide slow vibrato that comes in later */
