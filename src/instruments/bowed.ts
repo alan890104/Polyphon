@@ -74,6 +74,7 @@ export interface BowDef {
 }
 
 export interface Bowed {
+  /** The sample; it runs on a little past the loop's end, with the loop's start repeated (see GUARD) */
   data: Float32Array;
   /** Loop section: [start, end] (samples) */
   loop: [number, number];
@@ -84,6 +85,8 @@ const PRE = 0.8;
 /** The vibrato grows in over this long after it begins (about two cycles), to 85% of its depth; the rest it gains slowly up to the end of the attack section, so a held note blooms */
 const VIB_GROW = 0.3;
 const TABLE = 2048;
+/** Samples after the loop's end that repeat its start */
+const GUARD = 64;
 /** Modulation (frequency, volume) is computed once every few samples, with linear interpolation in between */
 const CR = 16;
 
@@ -379,7 +382,13 @@ export function bowSample(sr: number, f: number, d: BowDef, loud: boolean, seed:
   for (let i = A; i < N; i++) e2 += out[i] * out[i];
   const k = 0.2 / Math.sqrt(e2 / LS + 1e-12);
   for (let i = 0; i < N; i++) out[i] *= k;
-  return { data: out, loop: [A, N] };
+  // The buffer runs on past the loop's end with a copy of the loop's start. Chrome's looping source does not interpolate across the jump back
+  // when the loop ends at the very end of the buffer (a test sine clicked on every pass unless its loop began at a zero crossing), and low notes
+  // ticked once a loop; now the samples either side of the loop's end are the ones the loop plays.
+  const data = new Float32Array(N + GUARD);
+  data.set(out);
+  data.set(out.subarray(A, A + GUARD), N);
+  return { data, loop: [A, N] };
 }
 
 // ───────────────────────── Instruments ─────────────────────────
