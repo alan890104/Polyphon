@@ -1,0 +1,37 @@
+// Every example song, grouped into playlists (the player shows these).
+
+import type { Song } from 'polyphon';
+
+export interface Playlist {
+  id: string;
+  title: string;
+  description: string;
+  songs: { id: string; load: () => Promise<Song> }[];
+}
+
+const load = (m: Promise<{ default: Song }>) => m.then((x) => x.default);
+
+export const playlists: Playlist[] = [
+  {
+    id: 'demo',
+    title: 'Getting started',
+    description: 'Original pieces that show the notation: a 4/4 market tune, a 3/4 waltz, a piano ballad and a progressive-house track.',
+    songs: [
+      { id: 'morning-market', load: () => load(import('./demo/morning-market.ts')) },
+      { id: 'night-waltz', load: () => load(import('./demo/night-waltz.ts')) },
+      { id: 'after-midnight', load: () => load(import('./demo/after-midnight.ts')) },
+      { id: 'neon-tide', load: () => load(import('./demo/neon-tide.ts')) },
+    ],
+  },
+  {
+    id: 'classics',
+    title: 'Classics',
+    description: 'Public-domain music, note for note: the opening of Beethoven’s Moonlight Sonata, Pachelbel’s Canon in D for three violins and cello (and the same canon moved into D minor), and the exposition of Beethoven’s Fifth Symphony for full orchestra.',
+    songs: [
+      { id: 'moonlight', load: () => load(import('./classics/moonlight.ts')) },
+      { id: 'canon', load: () => load(import('./classics/canon.ts')) },
+      { id: 'canon-minor', load: () => load(import('./classics/canon-minor.ts')) },
+      { id: 'symphony5', load: () => load(import('./classics/symphony5.ts')) },
+    ],
+  },
+];

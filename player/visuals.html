@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f0e0c" />
+    <title>Polyphon Visualizer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@400..700&family=Instrument+Serif:ital@0;1&family=Noto+Sans+TC:wght@400;500&family=Noto+Serif+TC:wght@400&display=swap"
+    />
+    <style>
+      /* The harness page only: the visualizer brings its own styles */
+      body {
+        margin: 0;
+        background: #0f0e0c;
+        color: #eee7da;
+        font: 14px/1.4 'Instrument Sans', system-ui, sans-serif;
+      }
+      .harness-reopen,
+      .harness-start {
+        position: fixed;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1001;
+        padding: 10px 20px;
+        border: 1px solid rgb(238 231 218 / 0.3);
+        border-radius: 999px;
+        background: #0f0e0c;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+      }
+      .harness-reopen {
+        top: 50%;
+      }
+      .harness-start {
+        top: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/visuals/harness.tsx"></script>
+  </body>
+</html>
