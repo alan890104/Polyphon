@@ -109,6 +109,19 @@ const SAMPLED = {
   snap: D('snap', 0.35, 60),
   brush: D('brush', 0.3, 60),
   drip: D('drip', 0.25),
+  // ── Drum machines and electronic dance music (pitch is passed to the kicks). Balanced on their usual patterns at 128 BPM: the kicks
+  // on the beat as loud as `kick` (about -13 LUFS), snare and clap on the backbeat 4-6 dB under them, closed hats on sixteenths and
+  // open hats on the off-beats 10-12 dB under; the 909 kick's click peaks at full scale
+  /** Monophonic, as an 808 bassline is played: each note cuts off the last */
+  kick808: { ...D('kick808', 0.6, undefined, 1), choke: 'kick808' },
+  kick909: D('kick909', 0.8),
+  bigKick: D('bigKick', 0.57),
+  snare909: D('snare909', 0.5, 38),
+  clap909: D('clap909', 0.9, 39),
+  /** The 909's hi-hats are one voice: a closed hat cuts off a ringing open one */
+  hat909: { ...D('hat909', 0.78, 42, 4), choke: 'hat909' },
+  ohat909: { ...D('ohat909', 0.41, 46), choke: 'hat909' },
+  impact: D('impact', 0.4, 36, 2),
   // ── Short samples for fast figures
   spicc: S((sr, m) => spicc(sr, m), 0.55),
   brassStab: S((sr, m) => brassStab(sr, m), 0.55),

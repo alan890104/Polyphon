@@ -783,23 +783,57 @@ const birds: Voice = (c) => {
 
 
 
-/** Riser: band-pass noise and a sawtooth sweep upward together, reaching the top when the note ends and cutting off instantly (leading into the next beat's heavy hit) */
+/**
+ * White noise swept from `from` to `to` Hz over [t, end], each side of the stereo field its own noise: a high-pass under a rising sweep,
+ * a low-pass over a falling one, resonant so that it whistles at the edge of the sweep
+ */
+function noiseSweep(ctx: BaseAudioContext, out: AudioNode, t: number, end: number, from: number, to: number): void {
+  for (const side of [-0.8, 0.8]) {
+    const f = filt(ctx, to > from ? 'highpass' : 'lowpass', from, 4);
+    f.frequency.setValueAtTime(from, t);
+    f.frequency.exponentialRampToValueAtTime(to, end);
+    noiseSrc(ctx, t, end + 0.05).connect(f).connect(panned(ctx, out, side));
+  }
+}
+
+/**
+ * Riser (uplifter) for a build-up: wide white noise through a resonant high-pass sweeping up (params from → to, Hz), and a detuned sawtooth
+ * stack climbing two octaves to an octave above the note under an opening low-pass. It swells to its peak as the note ends and stops dead,
+ * leaving the first beat of the drop clear
+ */
 const riser: Voice = (c) => {
+  const { ctx, t, f, vel, o } = c;
+  const end = t + c.dur;
+  const g = gainNode(ctx, 0);
+  g.gain.setValueAtTime(vel * 0.008, t);
+  g.gain.exponentialRampToValueAtTime(vel * 0.25, end);
+  g.gain.linearRampToValueAtTime(0, end + 0.02);
+  g.connect(c.out);
+  noiseSweep(ctx, g, t, end, o.from ?? 260, o.to ?? 7000);
+  const lp = filt(ctx, 'lowpass', 500, 1);
+  lp.frequency.setValueAtTime(500, t);
+  lp.frequency.exponentialRampToValueAtTime(9000, end);
+  lp.connect(gainNode(ctx, 0.1)).connect(g);
+  // An unpitched part (a rhythm) climbs to C5
+  const top = f > 20 ? f * 2 : 523;
+  for (const cents of [-15, 0, 15]) {
+    const s = osc(ctx, 'sawtooth', top / 4, t, end + 0.05, cents);
+    s.frequency.exponentialRampToValueAtTime(top, end);
+    s.connect(lp);
+  }
+};
+
+/** Downlifter, the riser in reverse, for the bars after a drop or into a breakdown: wide white noise under a resonant low-pass sweeping down (params from → to, Hz) as it fades away */
+const downlifter: Voice = (c) => {
   const { ctx, t, vel, o } = c;
   const end = t + c.dur;
   const g = gainNode(ctx, 0);
-  g.gain.setValueAtTime(1e-4, t);
-  g.gain.exponentialRampToValueAtTime(vel * 0.8, end);
-  g.gain.linearRampToValueAtTime(0, end + 0.03);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vel * 0.3, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(vel * 3e-3, end);
+  g.gain.linearRampToValueAtTime(0, end + 0.02);
   g.connect(c.out);
-  const n = noiseSrc(ctx, t, end + 0.05);
-  const bp = filt(ctx, 'bandpass', o.from ?? 260, 1.6);
-  bp.frequency.setValueAtTime(o.from ?? 260, t);
-  bp.frequency.exponentialRampToValueAtTime(o.to ?? 7000, end);
-  n.connect(bp).connect(g);
-  const s = osc(ctx, 'sawtooth', 110, t, end + 0.05);
-  s.frequency.exponentialRampToValueAtTime(440, end);
-  s.connect(filt(ctx, 'lowpass', 1200, 0.7)).connect(gainNode(ctx, 0.25)).connect(g);
+  noiseSweep(ctx, g, t, end, o.from ?? 9000, o.to ?? 150);
 };
 
 // ───────────────────────── Catalog ─────────────────────────
@@ -854,4 +888,5 @@ export const VOICES = {
   distBass,
   birds,
   riser,
+  downlifter,
 } satisfies Record<string, Voice>;

@@ -1,14 +1,17 @@
 // Drum kit and percussion: membrane modes for drum bodies, filtered noise for snares and shakers, blooming bands of noise and 808-style metal for cymbals.
+// Then the drum machines of electronic dance music (the TR-808 and TR-909 circuits, a modern layered kick) and its impact.
 
 import { Biquad, normalize, rng, tailFade } from './core.ts';
 import { modal, type ModalPartial } from './modal.ts';
 
-type Gen = (sr: number, m: number, seed: number) => Float32Array;
+type Gen = (sr: number, m: number, seed: number) => Float32Array | [Float32Array, Float32Array];
 
 function buf(sr: number, len: number): Float32Array {
   return new Float32Array(Math.floor(sr * len));
 }
 const decay = (sr: number, t60: number) => Math.pow(10, -3 / (t60 * sr));
+/** The pitch of a tuned drum: the note it is given, or its own when the part has none */
+const pitchOf = (m: number, hz: number): number => (m ? 440 * Math.pow(2, (m - 69) / 12) : hz);
 
 /** Swept sine (the drum body) */
 function sweep(y: Float32Array, sr: number, f0: number, f1: number, tf: number, amp: number, t60: number, delay = 0): void {
@@ -138,6 +141,53 @@ const sat = (y: Float32Array, drive: number): Float32Array => {
   return y;
 };
 
+/**
+ * A drum machine's tuned body: a sine at f Hz, raised at the start by its pitch envelope (each [depth, seconds] adds f·depth that dies away
+ * with that time constant). It starts `delay` seconds in, holds its level for `hold` seconds, then decays to T60
+ */
+function chirp(y: Float32Array, sr: number, f: number, drops: [number, number][], amp: number, t60: number, hold = 0, delay = 0): void {
+  let ph = 0;
+  let env = amp;
+  const k = decay(sr, t60);
+  const d = Math.floor(delay * sr);
+  for (let i = d; i < y.length && env > 1e-6; i++) {
+    const t = (i - d) / sr;
+    let r = 1;
+    for (const [depth, tau] of drops) r += depth * Math.exp(-t / tau);
+    y[i] += Math.sin(ph) * env;
+    ph += (2 * Math.PI * f * r) / sr;
+    if (t >= hold) env *= k;
+  }
+}
+
+/**
+ * The TR-909's cymbals and hi-hats are recordings stored at 6 bits and played through an analog envelope: the recording is quantized at
+ * full level and the decay comes after, so the grit fades with the sound but stays loud against the recording's own quiet tail (its sizzle)
+ */
+function rom6(y: Float32Array, sr: number, t60: number): Float32Array {
+  normalize(y, 1);
+  const k = decay(sr, t60);
+  let env = 1;
+  for (let i = 0; i < y.length; i++) {
+    y[i] = (Math.round(y[i] * 32) / 32) * env;
+    env *= k;
+  }
+  return tailFade(y, sr);
+}
+
+/** Noise through a low-pass (resonant at q) that closes from f0 to f1 Hz with time constant tf, under a decay to T60: the whoosh of a falling sweep */
+function falling(y: Float32Array, sr: number, seed: number, f0: number, f1: number, tf: number, q: number, amp: number, t60: number): void {
+  const r = rng(seed);
+  const lp = new Biquad(sr, 'lp', f0, q);
+  const k = decay(sr, t60);
+  let env = amp;
+  for (let i = 0; i < y.length && env > 1e-6; i++) {
+    if (i % 32 === 0) lp.set('lp', f1 + (f0 - f1) * Math.exp(-i / sr / tf), q);
+    y[i] += lp.run(r()) * env;
+    env *= k;
+  }
+}
+
 export const DRUMS = {
   /**
    * Kick: a beater on a big, slack head. The body settles at about 52 Hz after a short glide (the strike stretches the head),
@@ -210,13 +260,16 @@ export const DRUMS = {
     noiseHit(y, sr, s + 1, [['bp', 2500, 0.7]], 0.6, 0.03);
     return tailFade(y, sr);
   },
-  /** Reversed cymbal: sucked in toward the next beat */
-  swell: (sr, m, s): Float32Array => {
-    const y: Float32Array = DRUMS.crash(sr, m, s).slice(0, Math.floor(sr * 1.6));
-    y.reverse();
-    const n = Math.floor(sr * 0.01);
-    for (let i = 0; i < n; i++) y[y.length - 1 - i] *= i / n;
-    return y;
+  /** Reversed cymbal: sucked in toward the next beat. A different crash on each side, so it swells wide */
+  swell: (sr, m, s): [Float32Array, Float32Array] => {
+    const side = (seed: number): Float32Array => {
+      const y: Float32Array = DRUMS.crash(sr, m, seed).slice(0, Math.floor(sr * 1.6));
+      y.reverse();
+      const n = Math.floor(sr * 0.01);
+      for (let i = 0; i < n; i++) y[y.length - 1 - i] *= i / n;
+      return y;
+    };
+    return [side(s), side(s + 7)];
   },
   shaker: (sr, _m, s) => {
     const y = buf(sr, 0.14);
@@ -235,7 +288,7 @@ export const DRUMS = {
    */
   taiko: (sr, m, s) => {
     const y = buf(sr, 1.4);
-    const f = m ? 440 * Math.pow(2, (m - 69) / 12) : 62;
+    const f = pitchOf(m, 62);
     head(y, sr, f, 0.15 + 0.2 * vary(s), [[1, 0, 2.405, 1, 1.1], [1.52, 1, 3.832, 0.6, 0.4], [2.1, 2, 5.136, 0.3, 0.25]], 1.12);
     noiseHit(y, sr, s, [['lp', 900]], 0.5, 0.08);
     noiseHit(y, sr, s + 1, [['bp', 1800, 0.8]], 0.9, 0.02);
@@ -244,7 +297,7 @@ export const DRUMS = {
   /** Frame drum (a tambourine without jingles, the hand drum): a low thud + the slap of fingers */
   frame: (sr, m, s) => {
     const y = buf(sr, 0.6);
-    const f = m ? 440 * Math.pow(2, (m - 69) / 12) : 95;
+    const f = pitchOf(m, 95);
     sweep(y, sr, f * 1.3, f, 0.02, 0.8, 0.45);
     noiseHit(y, sr, s, [['bp', 1400, 1]], 0.35, 0.03);
     return y;
@@ -267,7 +320,7 @@ export const DRUMS = {
    */
   tom: (sr, m, s) => {
     const y = buf(sr, 0.8);
-    const f = m ? 440 * Math.pow(2, (m - 69) / 12) : 110;
+    const f = pitchOf(m, 110);
     // Bigger, lower toms ring longer
     const t = 0.55 * Math.pow(110 / f, 0.3);
     // The stick lands between the centre and halfway out
@@ -283,7 +336,7 @@ export const DRUMS = {
    * Each variant lands at a slightly different distance from the rim, which changes how strongly each mode is excited (J_m(j_m1·r/a)), so a roll does not repeat itself.
    */
   timpani: (sr, m, s) => {
-    const f = m ? 440 * Math.pow(2, (m - 69) / 12) : 73;
+    const f = pitchOf(m, 73);
     // Strike point, as a fraction of the radius from the centre: a hand's breadth in from the rim
     const x = 0.6 + 0.1 * vary(s);
     const t11 = 2.4 * Math.pow(110 / f, 0.3);
@@ -296,18 +349,18 @@ export const DRUMS = {
     return modal(sr, f, parts, { len: Math.min(4, t11 + 0.4), bend: 1.03, bendT: 0.03, click: { amp: 0.22, t: 0.08, hz: 1.4, q: 0.8 }, seed: s });
   },
   woodblock: (sr, m, s) => {
-    const f = m ? 440 * Math.pow(2, (m - 69) / 12) : 1100;
+    const f = pitchOf(m, 1100);
     return modal(sr, f, [[1, 1, 0.09], [2.53, 0.3, 0.05]], { len: 0.2, click: { amp: 0.3, t: 0.01, hz: 3000 }, seed: s });
   },
   clave: (sr, _m, s) => modal(sr, 2500, [[1, 1, 0.12], [2.7, 0.2, 0.05]], { len: 0.2, seed: s }),
   /** Anvil: a smith's metallic strike (by pitch) */
   anvil: (sr, m, s) => {
-    const f = m ? 440 * Math.pow(2, (m - 69) / 12) : 1320;
+    const f = pitchOf(m, 1320);
     return modal(sr, f, [[1, 1, 1.8], [2.03, 0.5, 1.2], [3.31, 0.35, 0.8], [4.62, 0.2, 0.5], [6.9, 0.12, 0.3]], { len: 2, beat: 3, click: { amp: 0.8, t: 0.012, hz: 5000, q: 0.6 }, seed: s });
   },
   /** Gong (tam-tam): a metallic cloud that slowly blooms */
   gong: (sr, m, s) => {
-    const f = m ? 440 * Math.pow(2, (m - 69) / 12) : 90;
+    const f = pitchOf(m, 90);
     const r = rng(s + 5);
     const parts: ModalPartial[] = [];
     for (let i = 0; i < 26; i++) parts.push([1 + i * 0.37 + r() * 0.15 + (i > 6 ? i * i * 0.02 : 0), 1 / (1 + i * 0.25), 5 - i * 0.12]);
@@ -386,7 +439,7 @@ export const DRUMS = {
   /** Water drop */
   drip: (sr, m, s) => {
     const y = buf(sr, 0.4);
-    const f = m ? 440 * Math.pow(2, (m - 69) / 12) : 1400;
+    const f = pitchOf(m, 1400);
     let ph = 0;
     let env = 1;
     const k = decay(sr, 0.12);
@@ -398,5 +451,100 @@ export const DRUMS = {
     }
     void s;
     return y;
+  },
+  // ── Drum machines and electronic dance music
+  /**
+   * TR-808 bass drum: a bridged-T resonator near 50 Hz (tunable) rung by a 1 ms trigger pulse. For the first few milliseconds the attack
+   * circuit raises its frequency, so the note opens with a fast cycle near 150 Hz (the click that cuts through a mix); then it booms on
+   * for over a second, its pitch sighing down from about 65 Hz as it fades. The pitch envelope is fitted to recordings of an 808.
+   * Give it notes to play it as a bassline
+   */
+  kick808: (sr, m) => {
+    const y = buf(sr, 2);
+    chirp(y, sr, pitchOf(m, 50), [[4.8, 0.0027], [0.3, 0.04]], 1, 1.6);
+    return tailFade(sat(y, 1.5), sr);
+  },
+  /**
+   * TR-909 bass drum: a VCO whose pitch envelope dives from about 290 Hz to 50 Hz (tunable) with a 7 ms time constant, which is the punch
+   * (fitted to a recording of a 909); a waveshaper rounds it into a not-quite sine, and the attack control adds a click of noise just ahead of it
+   */
+  kick909: (sr, m, s) => {
+    const y = buf(sr, 0.8);
+    chirp(y, sr, pitchOf(m, 50), [[4.9, 0.007]], 1, 0.4, 0, 0.0015);
+    sat(y, 1.6);
+    noiseHit(y, sr, s, [['hp', 900], ['lp', 8000]], 1.3, 0.008);
+    return tailFade(y, sr);
+  },
+  /**
+   * The modern EDM kick, built in layers: a punch where the pitch dives from 400 Hz past 100 Hz in about 15 ms into a sub body at 50 Hz
+   * (tunable), driven into a soft clipper so it holds full level for its first 60 ms and then falls away quickly to leave room for the bass,
+   * and on top a click of noise at 2-7 kHz, which is what is heard of a kick on small speakers
+   */
+  bigKick: (sr, m, s) => {
+    const y = buf(sr, 0.6);
+    chirp(y, sr, pitchOf(m, 50), [[6, 0.006], [1, 0.03]], 1, 0.35, 0.06, 0.001);
+    sat(y, 2.2);
+    noiseHit(y, sr, s, [['hp', 2000], ['lp', 7000]], 1, 0.016);
+    return tailFade(y, sr);
+  },
+  /**
+   * TR-909 snare: two oscillators for the shell (185 and 330 Hz), each starting higher and dropping within about 10 ms, under bright
+   * high-passed noise for the wires (the snappy control); short and crisp, so it also suits the fast rolls of a build-up
+   */
+  snare909: (sr, _m, s) => {
+    const y = buf(sr, 0.45);
+    chirp(y, sr, 185, [[0.6, 0.012]], 0.7, 0.12);
+    chirp(y, sr, 330, [[0.3, 0.012]], 0.35, 0.08);
+    noiseHit(y, sr, s, [['hp', 1500], ['lp', 13000]], 0.85, 0.25);
+    noiseHit(y, sr, s + 1, [['bp', 4500, 0.9]], 0.4, 0.06);
+    return sat(y, 1.8);
+  },
+  /**
+   * TR-808 / 909 hand clap: white noise through a band-pass near 1.1 kHz, opened by a sawtooth envelope three times about 11 ms apart
+   * (hands not quite together), then once more into a short reverberant tail. The tail is drawn anew for each channel, so it spreads wide
+   */
+  clap909: (sr, _m, s) => {
+    const y = buf(sr, 0.7);
+    const gap = 0.011 + 0.002 * vary(s);
+    for (let i = 0; i < 4; i++) noiseHit(y, sr, s + i, [['bp', 1100, 1.2], ['hp', 700]], 2, i < 3 ? 0.02 : 0.06, 0.0003, i * gap);
+    const side = (seed: number): Float32Array => {
+      const c = y.slice();
+      noiseHit(c, sr, seed, [['bp', 1200, 0.8], ['hp', 600]], 0.6, 0.45, 0.002, 3 * gap);
+      return tailFade(sat(c, 1.5), sr);
+    };
+    return [side(s + 10), side(s + 20)];
+  },
+  /**
+   * TR-909 closed hi-hat. The 909 plays a 6-bit recording of a real hat (see rom6): dense noise above 6 kHz centred near 10 kHz, with
+   * a shimmer of the 808's six square waves (an octave up) under it, cut short by the decay
+   */
+  hat909: (sr, _m, s) => {
+    const y = buf(sr, 0.25);
+    noiseHit(y, sr, s, [['hp', 6000], ['hp', 6000], ['bp', 10000, 0.6]], 1, 0.25);
+    metal(y, sr, 410.6, 0.25, 0.2, 6000);
+    return rom6(y, sr, 0.09);
+  },
+  /** TR-909 open hi-hat: a 6-bit recording of an open hat, its wash blooming within a few milliseconds, faded out over half a second */
+  ohat909: (sr, _m, s) => {
+    const y = buf(sr, 0.8);
+    wash(y, sr, s, 410.6, 1.2, [[5500, 0.1, 0.001, 1.6], [8000, 0.3, 0.002, 1.5], [11000, 0.45, 0.004, 1.3], [15000, 0.35, 0.006, 1]]);
+    noiseHit(y, sr, s + 1, [['hp', 6000]], 0.2, 0.03);
+    return rom6(y, sr, 0.8);
+  },
+  /**
+   * Impact, the hit on the first beat of a drop: a sub thump that dives from about 160 Hz to 36 Hz and rumbles on for two seconds, and a
+   * burst of noise whose low-pass closes from bright to dark (a downward whoosh), clipped together. The noise is drawn anew for each
+   * channel, so the tail is wide
+   */
+  impact: (sr, _m, s) => {
+    const y = buf(sr, 3);
+    chirp(y, sr, 36, [[3, 0.03], [0.5, 0.25]], 1, 2.4);
+    noiseHit(y, sr, s, [['lp', 300]], 0.4, 0.15);
+    const side = (seed: number): Float32Array => {
+      const c = y.slice();
+      falling(c, sr, seed, 10000, 200, 0.6, 1.5, 0.9, 2.2);
+      return tailFade(sat(c, 1.6), sr);
+    };
+    return [side(s + 1), side(s + 2)];
   },
 } satisfies Record<string, Gen>;

@@ -27,6 +27,7 @@ interface Section {
 const UNPITCHED = new Set([
   'kick', 'boom', 'snare', 'field', 'rim', 'clap', 'hat', 'ohat', 'ride', 'crash', 'swell', 'shaker', 'tamb',
   'woodblock', 'clave', 'anvil', 'gong', 'thunder', 'thunderclap', 'chain', 'snap', 'brush', 'drip',
+  'kick909', 'bigKick', 'snare909', 'clap909', 'hat909', 'ohat909', 'impact',
 ]);
 /** Ambience beds: a looped texture with no notes to show */
 const AMBIENCE = new Set(['wind', 'sea', 'fire', 'crickets', 'rain', 'void', 'cave']);

@@ -35,6 +35,8 @@ export interface SampledInstrument {
   spread?: number;
   /** Supports glides between notes (the `>` marker in a melody) */
   glide?: boolean;
+  /** Choke group: a note cuts off the one still ringing in its group, as a drum machine's closed hi-hat cuts off its open one */
+  choke?: string;
 }
 
 export interface LiveInstrument {

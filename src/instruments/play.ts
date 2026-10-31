@@ -54,6 +54,7 @@ export function playNote(name: string, c: NoteCall): void {
     return;
   }
   g.gain.value = amp;
+  if (def.choke) choke(c, def.choke, g.gain);
   let out: AudioNode = c.out;
   if (def.spread) {
     const pan = c.ctx.createStereoPanner();
@@ -85,6 +86,23 @@ export function playNote(name: string, c: NoteCall): void {
       src.stop(Math.min(off + r * 1.5, c.t + b.duration));
     }
   } else src.stop(c.t + b.duration);
+}
+
+/** The gain of the note last started in each choke group, per audio context */
+const chokeGroups = new WeakMap<BaseAudioContext, Map<string, AudioParam>>();
+
+/** Cut off the note still ringing in a choke group as this one starts (notes are scheduled in time order), and make this one the group's */
+function choke(c: NoteCall, group: string, gain: AudioParam): void {
+  let groups = chokeGroups.get(c.ctx);
+  if (!groups) chokeGroups.set(c.ctx, (groups = new Map()));
+  const ringing = groups.get(group);
+  if (ringing) {
+    // The target of setTargetAtTime cannot be 0 (some implementations diverge): fade toward silence, then close
+    ringing.cancelScheduledValues(c.t);
+    ringing.setTargetAtTime(1e-4, c.t, 0.004);
+    ringing.setValueAtTime(0, c.t + 0.04);
+  }
+  groups.set(group, gain);
 }
 
 /** Bowed strings: pick the soft or hard layer, make up pitch with a rate change, loop the sustain section, and lift the bow when the note ends */
