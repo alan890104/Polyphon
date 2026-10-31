@@ -28,7 +28,21 @@ Polyphon 源自生物對戰 RPG [Eldor（艾爾多）](https://github.com/alan89
 
 ## 聆聽
 
-所有範例都由 Polyphon 自己算出來（沒有任何錄音）：
+所有範例都由 Polyphon 自己算出來，沒有任何錄音。其中六首在它們的音樂盒唱盤上播放：
+
+https://github.com/user-attachments/assets/3dd6375e-73da-4b24-bd01-fde3ada79b8c
+
+https://github.com/user-attachments/assets/e0cf3e6e-2149-4503-a2e3-3facc73d2753
+
+https://github.com/user-attachments/assets/7bf0cd1c-3810-4a21-96bb-052546b22d0d
+
+https://github.com/user-attachments/assets/32e30b01-1e8a-49c2-b495-7dad8942bd93
+
+https://github.com/user-attachments/assets/b75ce45f-5b55-4657-b7ac-4200df6921b1
+
+https://github.com/user-attachments/assets/2b1fafc0-cbc6-424c-b731-b079f3d0606e
+
+全部的 MP3：
 
 | 曲目 | 內容 | |
 | --- | --- | --- |
