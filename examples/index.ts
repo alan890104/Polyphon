@@ -26,10 +26,11 @@ export const playlists: Playlist[] = [
   {
     id: 'classics',
     title: 'Classics',
-    description: 'Public-domain music, note for note: the opening of Beethoven’s Moonlight Sonata, Pachelbel’s Canon in D for three violins and cello, and the exposition of Beethoven’s Fifth Symphony for full orchestra.',
+    description: 'Public-domain music, note for note: the opening of Beethoven’s Moonlight Sonata, Pachelbel’s Canon in D for three violins and cello (and the same canon moved into D minor), and the exposition of Beethoven’s Fifth Symphony for full orchestra.',
     songs: [
       { id: 'moonlight', load: () => load(import('./classics/moonlight.ts')) },
       { id: 'canon', load: () => load(import('./classics/canon.ts')) },
+      { id: 'canon-minor', load: () => load(import('./classics/canon-minor.ts')) },
       { id: 'symphony5', load: () => load(import('./classics/symphony5.ts')) },
     ],
   },

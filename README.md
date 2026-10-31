@@ -276,7 +276,7 @@ npm install
 npm run dev
 ```
 
-The player lists every example song (Beethoven's Moonlight Sonata and Fifth Symphony, Pachelbel's Canon in D and a few short demos), with a mixer to mute or solo tracks, MP3 and WAV download and MIDI import. Every song's cover is its score: the notes punched into a disc, angle for time and radius for pitch, the tune in brass. While a song plays its disc turns under the comb and the perforations light up as they pass.
+The player lists every example song (Beethoven's Moonlight Sonata and Fifth Symphony, Pachelbel's Canon in D, the same canon moved into D minor, and a few short demos), with a mixer to mute or solo tracks, MP3 and WAV download and MIDI import. Every song's cover is its score: the notes punched into a disc, angle for time and radius for pitch, the tune in brass. While a song plays its disc turns under the comb and the perforations light up as they pass.
 
 Press **F** (or the visualizer button) for the immersive view: full screen, the controls fade away while you listen. Pick a style (the turning disc ringed by its spectrum, falling notes onto a piano keyboard, spectrum, waveform, ridgeline, particles), a background (ink, the song's disc, aurora, starfield or a picture of your own) and a theme; the choice is remembered. Falling notes and the disc follow the score itself, in time with what you hear. MIDI files you import stay in your browser.
 
