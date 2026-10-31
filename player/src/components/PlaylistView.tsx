@@ -26,7 +26,8 @@ export function PlaylistView({ playlist }: { playlist: LibraryPlaylist }) {
           </h1>
           <p className="hero__description">{description}</p>
           <p className="hero__meta label">
-            {plural(songs.length, 'song')} · {formatLength(duration)}
+            <span>{plural(songs.length, 'song')}</span>
+            <span>{formatLength(duration)}</span>
           </p>
           <div className="actions">
             <IconButton

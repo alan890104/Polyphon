@@ -362,6 +362,8 @@ button:disabled {
 }
 
 .hero__meta {
+  display: flex;
+  gap: 24px;
   margin-top: 16px;
 }
 
@@ -493,6 +495,16 @@ button.track:hover {
 
 .track__length {
   justify-self: end;
+}
+
+.track__tempo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.track__meter {
+  color: var(--paper-2);
 }
 
 .tracks__head .track__tempo,

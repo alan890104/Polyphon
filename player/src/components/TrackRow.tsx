@@ -48,7 +48,7 @@ export function TrackRow({ number, playlist, entry }: TrackRowProps) {
           <Indicator number={number} status={status} />
           <span className="track__action">{playing ? <PauseIcon /> : <PlayIcon />}</span>
         </span>
-        <Columns entry={entry} title={title} description={description} tempo={`${bpm} BPM · ${formatMeter(meter)}`} length={formatTime(entry.duration)} />
+        <Columns entry={entry} title={title} description={description} tempo={`${bpm} BPM`} meter={formatMeter(meter)} length={formatTime(entry.duration)} />
       </button>
     </li>
   );
@@ -65,10 +65,12 @@ interface ColumnsProps {
   title: string;
   description: string;
   tempo: string;
+  /** Under the tempo, as the description sits under the title */
+  meter?: string;
   length: string;
 }
 
-function Columns({ entry, title, description, tempo, length }: ColumnsProps) {
+function Columns({ entry, title, description, tempo, meter, length }: ColumnsProps) {
   return (
     <>
       <span className="track__song">
@@ -80,7 +82,10 @@ function Columns({ entry, title, description, tempo, length }: ColumnsProps) {
           <span className="track__description">{description}</span>
         </span>
       </span>
-      <span className="track__tempo">{tempo}</span>
+      <span className="track__tempo">
+        {tempo}
+        {meter && <span className="track__meter">{meter}</span>}
+      </span>
       <span className="track__length">{length}</span>
     </>
   );
