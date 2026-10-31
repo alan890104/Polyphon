@@ -139,6 +139,34 @@ export const PlusIcon = () => (
   </Line>
 );
 
+/** Singing a tune in: a microphone */
+export const MicIcon = () => (
+  <Line>
+    <rect x="7.25" y="2.75" width="5.5" height="9.5" rx="2.75" />
+    <path d="M4.5 9.75a5.5 5.5 0 0 0 11 0M10 15.25v2.5" />
+  </Line>
+);
+
+export const StopIcon = () => (
+  <Solid>
+    <rect x="5.5" y="5.5" width="9" height="9" rx="1" />
+  </Solid>
+);
+
+/** Opening a recording: a sound wave */
+export const WaveIcon = () => (
+  <Line>
+    <path d="M3 10h1.5M6.5 7v6M9 4.5v11M11.5 7.5v5M14 6v8M16.5 9v2" />
+  </Line>
+);
+
+export const CopyIcon = () => (
+  <Line>
+    <rect x="7" y="7" width="9.5" height="9.5" rx="1.5" />
+    <path d="M13 4.5V4.25A1.25 1.25 0 0 0 11.75 3h-7.5A1.25 1.25 0 0 0 3 4.25v7.5A1.25 1.25 0 0 0 4.25 13H4.5" />
+  </Line>
+);
+
 export const WarningIcon = () => (
   <Line>
     <path d="M10 3.5 17 16H3z" />

@@ -1,0 +1,409 @@
+/* Hum a tune: a sheet over the listening room, set like the rest of it. The voice is drawn in paper, the written notes in brass. */
+
+.studio {
+  position: fixed;
+  z-index: 60;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(15 14 12 / 0.88);
+  animation: fade-in var(--fast) var(--ease);
+}
+
+.studio__sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: min(840px, 100%);
+  max-height: calc(100dvh - 48px);
+  padding: 20px 32px 32px;
+  overflow-y: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--ink-raised);
+  outline: none;
+  animation: sheet-in var(--slow) var(--ease);
+}
+
+.studio__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 -8px -8px 0;
+}
+
+.studio__title {
+  font: 400 40px/1.05 var(--serif);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.studio__lede {
+  max-width: 60ch;
+  margin-top: -12px;
+  color: var(--paper-2);
+  font-size: 15px;
+  text-wrap: pretty;
+}
+
+.studio__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 24px;
+  margin-top: -16px;
+}
+
+/* ───────────── Settings ───────────── */
+
+.studio__settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+}
+
+.setting {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.choice,
+.stepper {
+  display: inline-flex;
+  align-items: stretch;
+  height: 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+}
+
+.choice {
+  overflow: hidden;
+}
+
+.choice button {
+  padding: 0 14px;
+  color: var(--paper-2);
+  font: 500 12px/1 var(--mono);
+  letter-spacing: 0.04em;
+  transition:
+    color var(--fast) var(--ease),
+    background-color var(--fast) var(--ease);
+}
+
+.choice button + button {
+  border-left: 1px solid var(--line-strong);
+}
+
+.choice button:hover {
+  color: var(--paper);
+}
+
+.choice button[aria-pressed='true'] {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.stepper button {
+  width: 32px;
+  color: var(--paper-2);
+  font: 400 16px/1 var(--sans);
+  text-align: center;
+  transition: color var(--fast) var(--ease);
+}
+
+.stepper button:hover:not(:disabled) {
+  color: var(--paper);
+}
+
+.stepper button:disabled {
+  opacity: 0.35;
+}
+
+.stepper output {
+  display: grid;
+  grid-auto-flow: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 76px;
+  border-inline: 1px solid var(--line);
+  font: 500 13px/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.stepper__unit {
+  color: var(--paper-3);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+}
+
+.stepper[aria-disabled] output {
+  color: var(--paper-3);
+}
+
+/* ───────────── Buttons ───────────── */
+
+.studio__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.studio__primary,
+.studio__secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 20px 0 16px;
+  border-radius: 20px;
+  font-weight: 500;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    transform var(--fast) var(--ease);
+}
+
+.studio__primary {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.studio__primary:hover:not(:disabled) {
+  background: #fff9ee;
+}
+
+.studio__secondary {
+  border: 1px solid var(--line-strong);
+}
+
+.studio__secondary:hover:not(:disabled) {
+  border-color: var(--paper-2);
+}
+
+.studio__primary:active:not(:disabled),
+.studio__secondary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.studio__primary:disabled,
+.studio__secondary:disabled {
+  opacity: 0.5;
+}
+
+.studio__primary .icon,
+.studio__secondary .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.studio__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--paper-2);
+  font: 500 11px/1.4 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: color var(--fast) var(--ease);
+}
+
+.studio__link:hover {
+  color: var(--brass);
+}
+
+.studio__link .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.studio__error {
+  padding: 10px 14px;
+  border-left: 2px solid var(--oxblood);
+  background: var(--tint);
+  font-size: 13px;
+}
+
+.studio__note {
+  margin-top: -8px;
+}
+
+.studio__reading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 56px 0;
+  color: var(--paper-2);
+  overflow-wrap: anywhere;
+}
+
+.studio__reading .spinner {
+  color: var(--brass);
+}
+
+/* ───────────── Singing ───────────── */
+
+.studio__now {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.studio__note-name {
+  min-height: 64px;
+  margin-top: 8px;
+  color: var(--brass-lit);
+  font: 400 64px/1 var(--serif);
+  font-variant-numeric: tabular-nums;
+  transition: color var(--fast) var(--ease);
+}
+
+.studio__note-name[data-quiet] {
+  color: var(--paper-3);
+}
+
+.beats {
+  display: flex;
+  gap: 10px;
+  padding-bottom: 14px;
+}
+
+.beats li {
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--paper-3);
+  border-radius: 50%;
+}
+
+.beats[data-beat='1'] li:nth-child(1),
+.beats[data-beat='2'] li:nth-child(2),
+.beats[data-beat='3'] li:nth-child(3),
+.beats[data-beat='4'] li:nth-child(4) {
+  border-color: var(--brass);
+  background: var(--brass);
+}
+
+/* ───────────── The roll ───────────── */
+
+.roll {
+  display: block;
+  width: 100%;
+  height: 240px;
+}
+
+.roll--live,
+.roll-scroller {
+  border-block: 1px solid var(--line);
+}
+
+.roll-scroller {
+  overflow: auto hidden;
+}
+
+.roll-scroller .roll {
+  width: auto;
+}
+
+/* ───────────── Playing it back ───────────── */
+
+.studio__transport {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 20px;
+}
+
+.chips {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 15px;
+  color: var(--paper-2);
+  font-size: 13px;
+  transition:
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.chip:hover {
+  border-color: var(--paper-3);
+  color: var(--paper);
+}
+
+.chip[aria-pressed='true'] {
+  border-color: var(--brass);
+  color: var(--brass-lit);
+}
+
+/* ───────────── The score ───────────── */
+
+.score {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.score__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.score__text {
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 4px;
+  font: 400 13px/1.8 var(--mono);
+  user-select: text;
+}
+
+.score__bar {
+  padding: 0 12px;
+  border-left: 1px solid var(--line-strong);
+}
+
+.score__bar:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+/* ───────────── Phones: the whole screen ───────────── */
+
+@media (max-width: 699px) {
+  .studio {
+    padding: 0;
+  }
+
+  .studio__sheet {
+    gap: 20px;
+    height: 100dvh;
+    max-height: none;
+    padding: 12px 16px 24px;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .studio__title {
+    font-size: 32px;
+  }
+
+  .studio__note-name {
+    min-height: 48px;
+    font-size: 48px;
+  }
+
+  .roll {
+    height: 200px;
+  }
+}

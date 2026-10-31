@@ -1,5 +1,5 @@
 // The library the player shows: every playlist in examples/, with each song loaded up front for its title, tempo, length and tracks,
-// and MIDI files the listener imports (converted in the browser and kept in memory).
+// and the listener's own songs: MIDI files they import and tunes they hum (converted in the browser and kept in memory).
 
 import { songDuration, songFromMidi, type Song, type Track } from 'polyphon';
 import { playlists, type Playlist } from '../../examples/index.ts';
@@ -53,12 +53,12 @@ export async function importMidi(file: File, id: string): Promise<ReadySong> {
   return readySong(id, songFromMidi(await file.arrayBuffer(), { title: file.name.replace(MIDI_FILE, '') }));
 }
 
-/** The playlist of imported songs */
+/** The playlist of the listener's own songs */
 export function importsPlaylist(songs: ReadySong[]): LibraryPlaylist {
   return {
     id: IMPORTS_ID,
-    title: 'Your imports',
-    description: 'MIDI files you opened in this session. They stay in this tab: nothing is uploaded.',
+    title: 'Your songs',
+    description: 'MIDI files you opened and tunes you hummed in this session. They stay in this tab: nothing is uploaded.',
     songs,
     duration: totalDuration(songs),
   };
@@ -82,7 +82,7 @@ async function loadSong({ id, load }: Playlist['songs'][number]): Promise<Librar
   }
 }
 
-function readySong(id: string, song: Song): ReadySong {
+export function readySong(id: string, song: Song): ReadySong {
   const { intro, loop } = songDuration(song);
   return { status: 'ready', id, song, duration: intro + loop, tracks: trackGroups(song) };
 }

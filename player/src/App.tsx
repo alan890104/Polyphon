@@ -1,5 +1,5 @@
 // The listening room: the library sidebar, the playlist view, the Now playing panel and the bar along the bottom.
-// MIDI files can be imported from the sidebar or dropped anywhere on the window.
+// MIDI files can be imported from the sidebar or dropped anywhere on the window; tunes can be hummed in from the sidebar.
 
 import { lazy, Suspense, use, useState } from 'react';
 import { DropOverlay } from './components/DropOverlay.tsx';
@@ -11,16 +11,18 @@ import { Toast } from './components/Toast.tsx';
 import { IMPORTS_ID, type LibraryPlaylist } from './library.ts';
 import { useFileDrop } from './useFileDrop.ts';
 import { useImports } from './useImports.ts';
-import { usePlayerState } from './usePlayer.ts';
+import { usePlayer, usePlayerState } from './usePlayer.ts';
 import { useShortcuts } from './useShortcuts.ts';
 
 /** From this width the Now playing panel is a column beside the playlist (and starts open); below it, it opens over the page */
 const WIDE = '(min-width: 1100px)';
 
 const ImmersiveMode = lazy(() => import('./components/ImmersiveMode.tsx'));
+const HumStudio = lazy(() => import('./hum/HumStudio.tsx'));
 
 export function App({ library }: { library: Promise<LibraryPlaylist[]> }) {
   const examples = use(library);
+  const player = usePlayer();
   const imports = useImports();
   const playlists = imports.playlist ? [imports.playlist, ...examples] : examples;
   // The open playlist is kept in the address, so a reload (Vite reloads when a song file changes) comes back to it
@@ -30,6 +32,12 @@ export function App({ library }: { library: Promise<LibraryPlaylist[]> }) {
   const selected = playlists.find((p) => p.id === selectedId) ?? playlists[0];
   const showPanel = panelOpen && hasSong;
   const [immersive, setImmersive] = useState(false);
+  const [humming, setHumming] = useState(false);
+  const openStudio = () => {
+    // The microphone would hear the music
+    if (player.state.status === 'playing') player.toggle();
+    setHumming(true);
+  };
   const openImmersive = () => {
     if (!hasSong) return;
     setImmersive(true);
@@ -49,12 +57,25 @@ export function App({ library }: { library: Promise<LibraryPlaylist[]> }) {
 
   return (
     <div className="app" data-panel={showPanel ? '' : undefined}>
-      <Sidebar playlists={playlists} selected={selected} onSelect={(p) => select(p.id)} onImport={importFiles} />
+      <Sidebar playlists={playlists} selected={selected} onSelect={(p) => select(p.id)} onImport={importFiles} onHum={openStudio} />
       <PlaylistView key={selected.id} playlist={selected} />
       {showPanel && <NowPlayingPanel onClose={() => setPanelOpen(false)} onVisualizer={openImmersive} />}
       <NowPlayingBar panelOpen={showPanel} onTogglePanel={() => setPanelOpen(!showPanel)} onVisualizer={openImmersive} />
       {imports.errors.length > 0 && <Toast title="Couldn't import" messages={imports.errors} onDismiss={imports.dismissErrors} />}
       {dragging && <DropOverlay />}
+      {humming && (
+        <Suspense fallback={null}>
+          <HumStudio
+            title={`Hummed tune ${imports.hummed + 1}`}
+            onAdd={(song) => {
+              imports.addSong(song);
+              setHumming(false);
+              select(IMPORTS_ID);
+            }}
+            onClose={() => setHumming(false)}
+          />
+        </Suspense>
+      )}
       {immersive && (
         <Suspense fallback={<div className="immersive-loading" />}>
           <ImmersiveMode onClose={() => setImmersive(false)} />

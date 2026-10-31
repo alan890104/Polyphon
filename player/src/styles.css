@@ -180,10 +180,11 @@ button:disabled {
   grid-template-areas:
     'brand brand'
     'tagline tagline'
+    'hum hum'
     'heading import'
     'list list';
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
   align-items: center;
   min-height: 0;
   border-right: 1px solid var(--line);
@@ -214,6 +215,29 @@ button:disabled {
   color: var(--paper-2);
   font: italic 400 17px/1.35 var(--serif);
   text-wrap: pretty;
+}
+
+.hum-button {
+  grid-area: hum;
+  display: flex;
+  align-items: center;
+  justify-self: start;
+  gap: 8px;
+  margin: 24px 24px 0;
+  padding: 8px 16px 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  transition: border-color var(--fast) var(--ease);
+}
+
+.hum-button:hover {
+  border-color: var(--brass);
+}
+
+.hum-button .icon {
+  width: 18px;
+  height: 18px;
+  color: var(--brass);
 }
 
 .sidebar__heading {
@@ -1188,8 +1212,9 @@ button.now:hover {
 
   .sidebar {
     grid-template-areas:
-      'brand import'
-      'list list';
+      'brand hum import'
+      'list list list';
+    grid-template-columns: minmax(0, 1fr) auto auto;
     grid-template-rows: auto auto;
     border-right: 0;
     border-bottom: 1px solid var(--line);
@@ -1216,6 +1241,21 @@ button.now:hover {
 
   .import-button {
     margin: 4px 12px 0 0;
+  }
+
+  .hum-button {
+    margin: 4px 4px 0 0;
+    padding: 4px 8px;
+    border: 0;
+    color: var(--paper-2);
+    font: 500 11px/1.4 var(--mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .hum-button .icon {
+    width: 14px;
+    height: 14px;
   }
 
   .sidebar__list {

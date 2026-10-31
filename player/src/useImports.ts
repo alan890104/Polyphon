@@ -1,15 +1,21 @@
-// MIDI files imported in this session: converted in the browser, kept in memory (nothing is uploaded) and listed as one playlist.
+// The listener's own songs, from this session: MIDI files they imported (converted in the browser) and tunes they hummed, kept in
+// memory (nothing is uploaded) and listed as one playlist.
 
+import type { Song } from 'polyphon';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { errorMessage } from './format.ts';
-import { importMidi, importsPlaylist, type LibraryPlaylist, type ReadySong } from './library.ts';
+import { importMidi, importsPlaylist, readySong, type LibraryPlaylist, type ReadySong } from './library.ts';
 import { usePlayer } from './usePlayer.ts';
 
 export interface Imports {
-  /** "Your imports" (null until a file is imported) */
+  /** "Your songs" (null until there is one) */
   playlist: LibraryPlaylist | null;
   /** Import files; resolves with whether any of them became a song */
   add: (files: File[]) => Promise<boolean>;
+  /** Add a song made in the player (a hummed tune) */
+  addSong: (song: Song) => void;
+  /** How many tunes have been hummed, for naming the next */
+  hummed: number;
   /** Why files of the last import failed, one line per file */
   errors: string[];
   dismissErrors: () => void;
@@ -35,5 +41,11 @@ export function useImports(): Imports {
     return added.length > 0;
   };
 
-  return { playlist, add, errors, dismissErrors: () => setErrors([]) };
+  const [hummed, setHummed] = useState(0);
+  const addSong = (song: Song) => {
+    setSongs((list) => [...list, readySong(`tune-${++imported.current}`, song)]);
+    setHummed((n) => n + 1);
+  };
+
+  return { playlist, add, addSong, hummed, errors, dismissErrors: () => setErrors([]) };
 }
