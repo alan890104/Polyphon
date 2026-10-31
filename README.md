@@ -41,13 +41,14 @@ Every example, rendered by Polyphon itself (nothing here was recorded):
 | Canon in D Minor | The same canon moved into D minor, written as a transformation of the original | [▶ 4:08](docs/audio/canon-minor.mp3) |
 | Symphony No. 5 | Beethoven, the exposition of the first movement, for full orchestra | [▶ 1:19](docs/audio/symphony5.mp3) |
 | Carmen: Prelude | Bizet, the Prelude to Act 1, complete, for full orchestra: the procession, the Toreador's song, the fate motif | [▶ 3:36](docs/audio/carmen.mp3) |
+| Carmen: Habanera | Bizet, the opening of Carmen's entrance aria: her line on a solo violin over the cellos' habanera in D minor, then the chorus in D major | [▶ 0:50](docs/audio/habanera.mp3) |
 
 ## What it does
 
 - **Notation that reads like music.** Melodies are short strings (`'E5:4 D5:2 C5:2 |'`), drum patterns are grids (`'X...x...'`), harmony is chord symbols (`'Am7 | D7 | Gmaj7'`). Pads, arpeggios, bass lines and strums grow out of a progression. Everything produces plain data, so you can also write notes yourself.
 - **An orchestra with no samples.** Pianos and plucked strings are modelled physically, bowed strings are rendered player by player, and winds, brass, choirs and synths are synthesized live. Each sampled note is computed once and cached, so playback costs almost nothing.
 - **A jukebox for games.** Crossfades between songs, preloading, pause, resume and seek, ducking under sound effects, intros that lead into loops, and the browser's audio unlock handled for you.
-- **Import and export.** Load Standard MIDI Files with `songFromMidi`; render any song to a WAV with `renderSong` and `encodeWav`.
+- **Import and export.** Load Standard MIDI Files with `songFromMidi`, or write down a hummed melody with `transcribe`; render any song to a WAV with `renderSong` and `encodeWav`.
 - **A listening room.** `npm run dev` opens a player with every example and a per-track mixer; each song is drawn from its own notes as a perforated disc, like a polyphon's, that turns as it plays.
 
 ## Install
@@ -284,7 +285,7 @@ registerInstrument('myBell', {
 });
 ```
 
-## MIDI and audio files
+## MIDI, audio files and singing
 
 ```ts
 const song = songFromMidi(await file.arrayBuffer(), { title: file.name });
@@ -300,6 +301,17 @@ const wav = encodeWav(buffer);                        // 16-bit PCM
 
 A WAV is lossless but large, about 10 MB a minute. For an MP3 (about a seventh of that), hand the buffer to an MP3 encoder; the listening room does it with [lamejs](https://github.com/zhuker/lamejs) in a worker (`player/src/mp3.ts`), so the library itself needs none.
 
+A melody sung or hummed one note at a time can be written down. `PitchTracker` follows the voice's pitch as audio arrives, from a microphone or a file, and `transcribe` puts what it heard on the beat grid:
+
+```ts
+const tracker = new PitchTracker(audio.sampleRate);
+tracker.push(audio.getChannelData(0));
+const { melody, bpm, key } = transcribe(tracker.frames);
+// 'r:12 Bb4:4 | Bb4:3 C5 D5:2 D5:8 | A4:12 G4:4 | ...', 96.8, 'G minor'
+```
+
+It needs no trained model: a voice's pitch shows in the sound's own periodicity. A voice that sits sharp or flat, or drifts, is followed, and a note between two semitones takes the one in the key. Sung with a metronome (`{ bpm, start }`: its tempo and where its first bar begins), the notes fall on its beats; without one, the tempo and the downbeat are found from the notes themselves. A new note starts where the pitch moves, where the voice stops and starts again, or where the same note is struck anew, and a rest is written only for a clear silence. `formatMelody` writes any one-line part back as a melody string, spelled in its key.
+
 ## The listening room
 
 ```bash
@@ -311,10 +323,12 @@ The player lists every example song (Beethoven's Moonlight Sonata and Fifth Symp
 
 Press **F** (or the visualizer button) for the immersive view: full screen, the controls fade away while you listen. Pick a style (by default a disc music box in 3D, whose comb is plucked by each perforation as you hear its note while a lamp inside throws the notes onto the lid; or the turning disc ringed by its spectrum, falling notes onto a piano keyboard, spectrum, waveform, ridgeline, particles), a background (ink, the song's disc, aurora, starfield or a picture of your own; the music box has a room of its own) and a theme; the choice is remembered. The music box, falling notes and the disc follow the score itself, in time with what you hear. MIDI files you import stay in your browser.
 
+**Hum a tune** (in the sidebar) to have a melody written out. Sing or hum on "da" into the microphone, with a click to keep time or at your own pace, or open a recording. The voice is drawn as it comes in; then the notes appear on a roll, played on the instrument you pick (with your voice under them, to compare), with the score ready to copy and a button that adds the tune to Your songs beside the MIDI files you import. Nothing you sing leaves the browser.
+
 ## Development
 
 ```bash
-npm test             # notation, theory, MIDI import and every example song (Node, no browser)
+npm test             # notation, theory, MIDI import, transcription and every example song (Node, no browser)
 npm run typecheck
 npm run build        # the library, to dist/
 npm run build:player # the listening room, to player/dist/

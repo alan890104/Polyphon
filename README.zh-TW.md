@@ -41,13 +41,14 @@ Polyphon 源自生物對戰 RPG [Eldor（艾爾多）](https://github.com/alan89
 | Canon in D Minor | 同一首卡農移到 D 小調，以原曲轉換而成 | [▶ 4:08](docs/audio/canon-minor.mp3) |
 | Symphony No. 5 | 貝多芬《第五號交響曲》第一樂章呈示部，完整管弦樂團 | [▶ 1:19](docs/audio/symphony5.mp3) |
 | Carmen: Prelude | 比才《卡門》第一幕前奏曲全曲，完整管弦樂團：鬥牛士進場、鬥牛士之歌、命運動機 | [▶ 3:36](docs/audio/carmen.mp3) |
+| Carmen: Habanera | 比才《卡門》哈巴涅拉舞曲〈愛情是隻不羈的鳥〉的開頭：她的旋律由小提琴獨奏，走在大提琴的哈巴涅拉節奏上，從 D 小調走進 D 大調的合唱 | [▶ 0:50](docs/audio/habanera.mp3) |
 
 ## 它能做什麼
 
 - **讀起來像樂譜的記譜法。** 旋律是短字串（`'E5:4 D5:2 C5:2 |'`），鼓是格子（`'X...x...'`），和聲是和弦記號（`'Am7 | D7 | Gmaj7'`）。墊音、琶音、低音線、刷弦都從和弦進行長出來。所有東西都是純資料，你也可以自己產生音符。
 - **沒有取樣的樂團。** 鋼琴和撥弦用物理模型，弓弦樂一位一位演奏者分開算，管樂、銅管、合唱、合成器即時合成。取樣型樂器的每個音只算一次並快取，播放時幾乎不耗 CPU。
 - **給遊戲用的點唱機。** 換曲淡入淡出、預先準備、暫停／繼續／跳轉、在音效下壓低音樂、前奏接循環，並自動處理瀏覽器的音訊解鎖。
-- **匯入與匯出。** `songFromMidi` 讀標準 MIDI 檔；`renderSong` 加 `encodeWav` 把任何曲子輸出成 WAV。
+- **匯入與匯出。** `songFromMidi` 讀標準 MIDI 檔，`transcribe` 把哼唱的旋律寫成樂譜；`renderSong` 加 `encodeWav` 把任何曲子輸出成 WAV。
 - **音樂鑑賞室。** `npm run dev` 打開播放器，收錄所有範例，附分軌混音台；每首歌都依自己的音符畫成一張打孔圓盤（就像 polyphon 音樂盒的圓盤），播放時跟著轉動。
 
 ## 安裝
@@ -284,7 +285,7 @@ registerInstrument('myBell', {
 });
 ```
 
-## MIDI 與音檔
+## MIDI、音檔與哼唱
 
 ```ts
 const song = songFromMidi(await file.arrayBuffer(), { title: file.name });
@@ -300,6 +301,17 @@ const wav = encodeWav(buffer);                        // 16-bit PCM
 
 WAV 是無損的，但檔案很大，每分鐘約 10 MB。要 MP3（大約七分之一大）就把 buffer 交給 MP3 編碼器；鑑賞室是在 worker 裡用 [lamejs](https://github.com/zhuker/lamejs) 編碼（`player/src/mp3.ts`），所以函式庫本身不需要任何編碼器。
 
+一次唱一個音的旋律（哼唱或歌唱）可以寫成樂譜。`PitchTracker` 隨著聲音進來追蹤音高，來源可以是麥克風或音檔；`transcribe` 再把聽到的內容放到拍子格線上：
+
+```ts
+const tracker = new PitchTracker(audio.sampleRate);
+tracker.push(audio.getChannelData(0));
+const { melody, bpm, key } = transcribe(tracker.frames);
+// 'r:12 Bb4:4 | Bb4:3 C5 D5:2 D5:8 | A4:12 G4:4 | ...', 96.8, 'G minor'
+```
+
+這不需要訓練過的模型：人聲的音高就藏在聲音本身的週期裡。唱得整體偏高、偏低或越唱越偏，都會被跟上；落在兩個半音中間的音，會選調內的那一個。跟著節拍器唱時（`{ bpm, start }`：它的速度和第一小節從哪裡開始），音符會落在節拍器的拍子上；沒有節拍器時，速度和強拍位置會從音符本身推算出來。音高改變、聲音停了再出來，或同一個音重新發出，都算新的一個音；只有明顯的停頓才會寫成休止符。`formatMelody` 能把任何單聲部的段落寫回旋律字串，並依調號拼寫升降記號。
+
 ## 音樂鑑賞室
 
 ```bash
@@ -311,10 +323,12 @@ npm run dev
 
 按 **F**（或視覺化按鈕）進入沉浸模式：全螢幕，聆聽時控制列會自動淡出。可以選擇樣式（預設是一台 3D 的圓盤音樂盒：你聽到每個音的同時，它的孔正好撥動簧片，盒裡的燈把正在響的音投到盒蓋上；另有被頻譜環繞的轉動圓盤、落到鋼琴鍵盤上的音符、頻譜、波形、山脊圖、粒子）、背景（墨色、這首歌的圓盤、極光、星空或你自己的圖片；音樂盒有自己的房間）和配色主題，設定會被記住。音樂盒、落下的音符和圓盤都直接照樂譜走，和你聽到的聲音同步。匯入的 MIDI 只留在你的瀏覽器裡。
 
+按側欄的 **Hum a tune** 把旋律寫成樂譜：對著麥克風用「da」哼或唱，可以開節拍器跟著拍子，也可以照自己的速度；或者直接打開一段錄音。唱的時候畫面會即時畫出你的音高，唱完音符會排在捲軸上，用你選的樂器演奏（也可以把你的聲音疊在下面對照），樂譜可以直接複製，一個按鈕就能把這首曲子加進 Your songs，和匯入的 MIDI 放在一起。你唱的東西不會離開瀏覽器。
+
 ## 開發
 
 ```bash
-npm test             # 記譜、樂理、MIDI 匯入，以及每一首範例曲（Node，不需要瀏覽器）
+npm test             # 記譜、樂理、MIDI 匯入、哼唱轉譜，以及每一首範例曲（Node，不需要瀏覽器）
 npm run typecheck
 npm run build        # 函式庫，輸出到 dist/
 npm run build:player # 鑑賞室，輸出到 player/dist/
