@@ -125,7 +125,7 @@ defineSong({
   reverb: { size: 2.6, damp: 0.5, preDelay: 0.02, early: 0.3, mix: 1 },
   delay: { steps: 3, feedback: 0.3, tone: 2800, mix: 0.8 },  // 跟速度同步的左右乒乓延遲
   gain: 1,
-  master: { warm: 2, cut: 1, trim: -1 },  // 母帶等化（dB）
+  master: { warm: 2, cut: 1, trim: -1 },  // 母帶等化（dB）；glue 與 loud 見下方
   intro: [/* 只播一次的軌道 */],
   tracks: [/* 循環的軌道 */],
   loop: true,                // false：只播一次（短曲、號角）
@@ -145,10 +145,35 @@ defineSong({
 | `pan` | 0 | -1 左到 1 右 |
 | `reverb` | 0.25 | 送到殘響的量 |
 | `delay` | 0 | 送到延遲的量 |
+| `duck` | | 跟著另一軌的敲擊下沉：那一軌的名字（`'Kick'`），或 `{ by, depth, release }` |
+| `lowpass` | | 低通截止頻率（Hz），或掃頻 `{ step: Hz }` |
+| `highpass` | | 高通截止頻率（Hz），或掃頻 |
 | `transpose` | 0 | 半音 |
 | `humanize` | 0.008 秒（鼓 0.003） | 時間上的人味 |
 | `params` | | 樂器參數：`attack`、`release`、`bright`、`glide`、`ring`、`tune` 等 |
 | `repeat` | true | 重複填滿段落 |
+
+### 電子音樂的混音
+
+```ts
+const harmony = chords('Fm | Db | Ab | Eb');
+
+defineSong({
+  title: 'Drop',
+  bpm: 128,
+  master: { glue: 0.5, loud: 8 },
+  tracks: [
+    { name: 'Kick', instrument: 'bigKick', part: rhythm('X...'.repeat(64), { pitch: 'F1' }) },
+    { name: 'Chords', instrument: 'supersaw', part: pad(harmony, { center: 'Ab4' }), duck: 'Kick' },
+    { name: 'Sub', instrument: 'sub', part: roots(harmony, { register: 'F1' }), duck: { by: 'Kick', depth: 0.9 } },
+    { name: 'Pluck', instrument: 'pluck', part: arpeggio(harmony, '0 1 2 3', { center: 'C5' }), lowpass: { 0: 400, 128: 400, 256: 18000 } },
+  ],
+});
+```
+
+- **側鏈抽吸。** `duck: 'Kick'` 讓這一軌在同一段落裡名為 Kick 的那一軌每敲一下就往下沉，再慢慢回升：也就是 house 與 EDM 那種「抽吸」的律動。`depth` 是下沉多深（0-1，預設 0.7），`release` 是幾個 step 回到原音量（預設 4，一拍）。它跟著音符走而不是跟著聲音，所以跳轉和循環時都準確，大鼓靜音或 `gain: 0` 時也照樣會抽吸。
+- **濾波掃頻。** `lowpass` 與 `highpass` 接受一個截止頻率（Hz），或從段落開頭算起的轉折點 `{ step: Hz }`。截止頻率在轉折點之間依音高均勻滑動，第一個之前與最後一個之後維持不變，所以上面的撥音前八小節是暗的，接下來八小節逐漸打開。每次循環都會重新掃一次。
+- **母帶。** `glue`（0-1）是讓整體混音黏在一起的匯流排壓縮。`loud` 把歌曲做成大聲的母帶：推進一個峰值 -1 dBFS 的磚牆限幅器的 dB 數（EDM 大約 6 到 10）。設了 `loud` 的歌會跳過其他歌共用的溫和限幅器，不會被壓縮兩次。
 
 ## 播放
 

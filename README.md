@@ -125,7 +125,7 @@ defineSong({
   reverb: { size: 2.6, damp: 0.5, preDelay: 0.02, early: 0.3, mix: 1 },
   delay: { steps: 3, feedback: 0.3, tone: 2800, mix: 0.8 },  // tempo-synced ping-pong
   gain: 1,
-  master: { warm: 2, cut: 1, trim: -1 },  // mastering EQ in dB
+  master: { warm: 2, cut: 1, trim: -1 },  // mastering EQ in dB; glue and loud below
   intro: [/* tracks that play once */],
   tracks: [/* tracks that loop */],
   loop: true,                // false: play once (jingles, fanfares)
@@ -145,10 +145,35 @@ A track:
 | `pan` | 0 | -1 left to 1 right |
 | `reverb` | 0.25 | send to the room |
 | `delay` | 0 | send to the delay |
+| `duck` | | pump under another track's hits: its name (`'Kick'`), or `{ by, depth, release }` |
+| `lowpass` | | low-pass cutoff in Hz, or a sweep `{ step: Hz }` |
+| `highpass` | | high-pass cutoff in Hz, or a sweep |
 | `transpose` | 0 | semitones |
 | `humanize` | 0.008 s (drums 0.003) | timing looseness |
 | `params` | | instrument settings: `attack`, `release`, `bright`, `glide`, `ring`, `tune` and others |
 | `repeat` | true | repeat to fill the section |
+
+### Mixing electronic music
+
+```ts
+const harmony = chords('Fm | Db | Ab | Eb');
+
+defineSong({
+  title: 'Drop',
+  bpm: 128,
+  master: { glue: 0.5, loud: 8 },
+  tracks: [
+    { name: 'Kick', instrument: 'bigKick', part: rhythm('X...'.repeat(64), { pitch: 'F1' }) },
+    { name: 'Chords', instrument: 'supersaw', part: pad(harmony, { center: 'Ab4' }), duck: 'Kick' },
+    { name: 'Sub', instrument: 'sub', part: roots(harmony, { register: 'F1' }), duck: { by: 'Kick', depth: 0.9 } },
+    { name: 'Pluck', instrument: 'pluck', part: arpeggio(harmony, '0 1 2 3', { center: 'C5' }), lowpass: { 0: 400, 128: 400, 256: 18000 } },
+  ],
+});
+```
+
+- **Sidechain pumping.** `duck: 'Kick'` dips a track at every hit of the track called Kick in the same section, then swells it back: the pumping of house and EDM. `depth` is how far it dips (0-1, default 0.7) and `release` how many steps it takes to come back (default 4, a beat). It follows the notes, not the sound, so it stays exact through seeks and loops, and a muted or silent kick (`gain: 0`) still drives it.
+- **Filter sweeps.** `lowpass` and `highpass` take a cutoff in Hz, or breakpoints `{ step: Hz }` counted from the start of the section. The cutoff glides between them evenly in pitch and holds before the first and after the last, so the pluck above stays dark for eight bars and opens over the next eight. Each loop starts the sweep again.
+- **Mastering.** `glue` (0-1) is bus compression that holds the mix together. `loud` masters the song loud: that many dB pushed into a brickwall limiter that peaks at -1 dBFS (EDM: about 6 to 10). A song with `loud` skips the gentle limiter other songs share, so it is not compressed twice.
 
 ## Playing music
 
