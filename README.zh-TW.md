@@ -4,6 +4,8 @@ https://github.com/user-attachments/assets/da754130-8c39-4e8d-962d-78e3fc75a40d
 
 <p align="center"><em>Por una Cabeza</em> 電子探戈版。每個音都由 Polyphon 合成，沒有任何錄音。</p>
 
+<p align="center"><a href="https://alan890104.github.io/Polyphon/"><b>打開音樂鑑賞室</b></a>：所有範例，直接在瀏覽器裡播放。</p>
+
 **用程式碼寫音樂，在瀏覽器裡演奏。** 一套記譜語法、一支 120 種樂器的合成樂團，加上一個排程器，全部建立在 Web Audio API 上。沒有任何音檔：每個音都是在瀏覽器裡算出來的。
 
 [English](README.md)
@@ -68,12 +70,12 @@ https://github.com/user-attachments/assets/2b1fafc0-cbc6-424c-b731-b079f3d0606e
 - **沒有取樣的樂團。** 鋼琴和撥弦用物理模型，弓弦樂一位一位演奏者分開算，管樂、銅管、合唱、合成器即時合成。取樣型樂器的每個音只算一次並快取，播放時幾乎不耗 CPU。
 - **給遊戲用的點唱機。** 換曲淡入淡出、預先準備、暫停／繼續／跳轉、在音效下壓低音樂、前奏接循環，並自動處理瀏覽器的音訊解鎖。
 - **匯入與匯出。** `songFromMidi` 讀標準 MIDI 檔，`transcribe` 把哼唱的旋律寫成樂譜；`renderSong` 加 `encodeWav` 把任何曲子輸出成 WAV。
-- **音樂鑑賞室。** `npm run dev` 打開播放器，收錄所有範例，附分軌混音台；每首歌都依自己的音符畫成一張打孔圓盤（就像 polyphon 音樂盒的圓盤），播放時跟著轉動。
+- **音樂鑑賞室。** [直接在瀏覽器打開](https://alan890104.github.io/Polyphon/)，或用 `npm run dev` 在本機執行：一個收錄所有範例的播放器，附分軌混音台；每首歌都依自己的音符畫成一張打孔圓盤（就像 polyphon 音樂盒的圓盤），播放時跟著轉動。
 
 ## 安裝
 
 ```bash
-npm install github:alan890104/polyphon
+npm install polyphon
 ```
 
 內含 TypeScript 型別，沒有任何執行期相依套件。
@@ -339,6 +341,8 @@ const { melody, bpm, key } = transcribe(tracker.frames);
 這不需要訓練過的模型：人聲的音高就藏在聲音本身的週期裡。唱得整體偏高、偏低或越唱越偏，都會被跟上；落在兩個半音中間的音，會選調內的那一個。跟著節拍器唱時（`{ bpm, start }`：它的速度和第一小節從哪裡開始），音符會落在節拍器的拍子上；沒有節拍器時，速度和強拍位置會從音符本身推算出來。音高改變、聲音停了再出來，或同一個音重新發出，都算新的一個音；只有明顯的停頓才會寫成休止符。`formatMelody` 能把任何單聲部的段落寫回旋律字串，並依調號拼寫升降記號。
 
 ## 音樂鑑賞室
+
+線上版在 [alan890104.github.io/Polyphon](https://alan890104.github.io/Polyphon/)。要從原始碼執行：
 
 ```bash
 npm install

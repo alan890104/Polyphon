@@ -4,6 +4,8 @@ https://github.com/user-attachments/assets/da754130-8c39-4e8d-962d-78e3fc75a40d
 
 <p align="center"><em>Por una Cabeza</em> as electro tango. Every note is synthesized by Polyphon; nothing was recorded.</p>
 
+<p align="center"><a href="https://alan890104.github.io/Polyphon/"><b>Open the listening room</b></a>: every example, playing in your browser.</p>
+
 **Music for the browser, written as code.** A score notation, a synthesized orchestra of 120 instruments and a scheduler, on top of the Web Audio API. There are no audio files: every note is computed in the browser.
 
 [繁體中文](README.zh-TW.md)
@@ -68,12 +70,12 @@ And every one as an MP3:
 - **An orchestra with no samples.** Pianos and plucked strings are modelled physically, bowed strings are rendered player by player, and winds, brass, choirs and synths are synthesized live. Each sampled note is computed once and cached, so playback costs almost nothing.
 - **A jukebox for games.** Crossfades between songs, preloading, pause, resume and seek, ducking under sound effects, intros that lead into loops, and the browser's audio unlock handled for you.
 - **Import and export.** Load Standard MIDI Files with `songFromMidi`, or write down a hummed melody with `transcribe`; render any song to a WAV with `renderSong` and `encodeWav`.
-- **A listening room.** `npm run dev` opens a player with every example and a per-track mixer; each song is drawn from its own notes as a perforated disc, like a polyphon's, that turns as it plays.
+- **A listening room.** [Open it in your browser](https://alan890104.github.io/Polyphon/), or run it with `npm run dev`: a player with every example and a per-track mixer; each song is drawn from its own notes as a perforated disc, like a polyphon's, that turns as it plays.
 
 ## Install
 
 ```bash
-npm install github:alan890104/polyphon
+npm install polyphon
 ```
 
 TypeScript types are included. Polyphon has no runtime dependencies.
@@ -339,6 +341,8 @@ const { melody, bpm, key } = transcribe(tracker.frames);
 It needs no trained model: a voice's pitch shows in the sound's own periodicity. A voice that sits sharp or flat, or drifts, is followed, and a note between two semitones takes the one in the key. Sung with a metronome (`{ bpm, start }`: its tempo and where its first bar begins), the notes fall on its beats; without one, the tempo and the downbeat are found from the notes themselves. A new note starts where the pitch moves, where the voice stops and starts again, or where the same note is struck anew, and a rest is written only for a clear silence. `formatMelody` writes any one-line part back as a melody string, spelled in its key.
 
 ## The listening room
+
+It is online at [alan890104.github.io/Polyphon](https://alan890104.github.io/Polyphon/). To run it from a clone:
 
 ```bash
 npm install

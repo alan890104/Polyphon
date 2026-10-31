@@ -7,6 +7,8 @@ import { defaultClientConditions, defineConfig } from 'vite';
 
 export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
+  // Served from a subpath on GitHub Pages; the Pages workflow passes it in
+  base: process.env.POLYPHON_BASE ?? '/',
   plugins: [react()],
   resolve: { conditions: ['polyphon-source', ...defaultClientConditions] },
   server: { fs: { allow: [fileURLToPath(new URL('..', import.meta.url))] } },
