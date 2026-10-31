@@ -22,8 +22,8 @@ export function mastersItself(song: Song): boolean {
   return song.master?.loud !== undefined;
 }
 
-/** The loudest a song mastered loud peaks, dBFS (its inter-sample peaks stay under -0.5) */
-const CEILING = -1;
+/** The loudest a song mastered loud peaks, dBFS: the clipper's oversampling overshoots it by about 0.25 dB between the samples, which stays under -1 */
+const CEILING = -1.5;
 
 /**
  * The final stage of a song mastered loud: `loud` dB of drive into a brickwall limiter (songs peak around full scale before the

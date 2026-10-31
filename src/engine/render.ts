@@ -14,6 +14,12 @@ export interface RenderOptions {
   sampleRate?: number;
 }
 
+/**
+ * Seconds of music scheduled at a time while rendering, as live playback schedules a little ahead of the clock: scheduled all at once,
+ * every note of a long song would sit in the audio graph from the start, and the render would take quadratic time
+ */
+const WINDOW = 1;
+
 /** Render a song to a stereo AudioBuffer, through the same output stage as live playback (browsers only: needs OfflineAudioContext) */
 export async function renderSong(song: Song, { duration, loops = 1, sampleRate = 44100 }: RenderOptions = {}): Promise<AudioBuffer> {
   if (typeof OfflineAudioContext === 'undefined') throw new Error('renderSong needs OfflineAudioContext (a browser)');
@@ -23,7 +29,14 @@ export async function renderSong(song: Song, { duration, loops = 1, sampleRate =
   prepareSongSync(ctx, song);
   const out = mastersItself(song) ? ctx.destination : createOutputStage(ctx, ctx.destination);
   const playback = new Playback(ctx, out, song, { at: 0.05, loops });
-  playback.schedule(length);
+  // Suspend the render once a window to schedule the next one
+  playback.schedule(2 * WINDOW);
+  for (let t = WINDOW; t < length; t += WINDOW) {
+    void ctx.suspend(t).then(() => {
+      playback.schedule(t + 2 * WINDOW);
+      void ctx.resume();
+    });
+  }
   return ctx.startRendering();
 }
 

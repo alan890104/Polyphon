@@ -173,7 +173,7 @@ defineSong({
 
 - **Sidechain pumping.** `duck: 'Kick'` dips a track at every hit of the track called Kick in the same section, then swells it back: the pumping of house and EDM. `depth` is how far it dips (0-1, default 0.7) and `release` how many steps it takes to come back (default 4, a beat). It follows the notes, not the sound, so it stays exact through seeks and loops, and a muted or silent kick (`gain: 0`) still drives it.
 - **Filter sweeps.** `lowpass` and `highpass` take a cutoff in Hz, or breakpoints `{ step: Hz }` counted from the start of the section. The cutoff glides between them evenly in pitch and holds before the first and after the last, so the pluck above stays dark for eight bars and opens over the next eight. Each loop starts the sweep again.
-- **Mastering.** `glue` (0-1) is bus compression that holds the mix together. `loud` masters the song loud: that many dB pushed into a brickwall limiter that peaks at -1 dBFS (EDM: about 6 to 10). A song with `loud` skips the gentle limiter other songs share, so it is not compressed twice.
+- **Mastering.** `glue` (0-1) is bus compression that holds the mix together. `loud` masters the song loud: that many dB pushed into a brickwall limiter that keeps the peaks under -1 dBFS, between the samples too (EDM: about 6 to 10). A song with `loud` skips the gentle limiter other songs share, so it is not compressed twice.
 
 ## Playing music
 

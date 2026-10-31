@@ -104,7 +104,7 @@ export interface Master {
   trim?: number;
   /** Bus compression that glues the mix together, 0-1 (0.3 gentle, 0.6 firm) */
   glue?: number;
-  /** Master loud: dB pushed into a brickwall limiter that peaks at -1 dBFS (EDM: about 6-10). The song then bypasses the gentle limiter other songs share */
+  /** Master loud: dB pushed into a brickwall limiter that keeps the peaks under -1 dBFS, between the samples too (EDM: about 6-10). The song then bypasses the gentle limiter other songs share */
   loud?: number;
 }
 
