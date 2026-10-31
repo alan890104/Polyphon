@@ -13,9 +13,16 @@
 //   - a corner fixed in hertz left the low strings as bright as the high ones (bowTable);
 //   - between the partials the noise floor was 6-14 dB cleaner than the recordings (bow noise raised, and rounded off with the tone).
 //
-// The sample has two parts: the attack (the bow has just gripped the string, vibrato has not begun) and a sustain section that can loop seamlessly.
+// The sample has two parts: the attack (the bow grips the string, the vibrato comes in and grows) and a sustain section that can loop seamlessly.
 // All the modulation in the sustain section (vibrato, intonation drift, bow-pressure swell, bow noise) has the loop length as its period,
 // and each player's frequency is also fine-tuned so that it covers a whole number of periods within the loop length, so there is no seam at the loop point.
+//
+// Pitch-tracked on held notes, the vibrato was there but easy to miss: it began 0.3 s into a note and reached full depth only at 0.5 s, so eighth
+// notes had none and quarter notes were half straight; it was a little narrow (violin ±20 cents, cello ±15, each double bass ±8) and every cycle
+// was the same; and rounding its speed to whole cycles in a 1.5 s loop put a violin at 5.3 or 6.0 Hz depending on the note, and a section's seven
+// players on just two speeds. Now it starts 0.1 s after the bow (audible from about 0.2 s), is most of the way in two cycles later and keeps
+// deepening a little until 0.8 s, so a held note blooms; a solo's loop is cut to fit its vibrato and a section's is long enough for its players
+// to spread over three speeds; and speed and depth wander a little from cycle to cycle, as a hand's do.
 
 import { rng } from './dsp/core.ts';
 
@@ -41,10 +48,11 @@ export interface BowDef {
   spread: number;
   /** Intonation that each player slowly drifts (cents) */
   drift: number;
+  /** Vibrato speed (Hz): each note, and each player in a section, varies around it */
   vibRate: number;
-  /** Vibrato depth (cents) */
+  /** Vibrato depth once it has grown in (cents, up and down from the note) */
   vibDepth: number;
-  /** How long after the attack vibrato begins (seconds) */
+  /** How long after the bow starts the vibrato begins (seconds) */
   vibDelay: number;
   /** Range of the bowing point (fraction of the string length): each player sits somewhere in it */
   beta: [number, number];
@@ -61,7 +69,7 @@ export interface BowDef {
   /** How many cents below the note the attack slides up from */
   scoop: number;
   body: BodyDef;
-  /** Loop section length (seconds) */
+  /** Loop section length (seconds); a solo's is adjusted to hold a whole number of its vibrato cycles */
   loop: number;
 }
 
@@ -71,8 +79,10 @@ export interface Bowed {
   loop: [number, number];
 }
 
-/** Attack section length (seconds): the attack and the vibrato fade-in must both finish before it ends, and the body's resonances must have settled */
-const PRE = 0.62;
+/** Attack section length (seconds): the attack and the vibrato's growth must both finish before it ends, and the body's resonances must have settled */
+const PRE = 0.8;
+/** The vibrato grows in over this long after it begins (about two cycles), to 85% of its depth; the rest it gains slowly up to the end of the attack section, so a held note blooms */
+const VIB_GROW = 0.3;
 const TABLE = 2048;
 /** Modulation (frequency, volume) is computed once every few samples, with linear interpolation in between */
 const CR = 16;
@@ -174,8 +184,15 @@ const smooth = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
  */
 export function bowSample(sr: number, f: number, d: BowDef, loud: boolean, seed: number): Bowed {
   const r = rng(seed * 7919 + Math.round(f * 13));
+  const P = d.players;
+  const solo = P === 1;
+  // Vibrato speed: a lighter bow goes with a slightly slower and narrower vibrato. A solo varies a little from note to note and its loop is cut
+  // to a whole number of its cycles; in a section each player has their own speed, rounded to whole cycles in the loop
+  const pace = loud ? 1 : 0.96;
+  const soloRate = d.vibRate * pace * (1 + 0.04 * r());
+  const loop = solo ? Math.max(1, Math.round(soloRate * d.loop)) / soloRate : d.loop;
   // The attack section and the loop section are both integer multiples of CR, so the modulation's sample grid lines up at the loop's head and tail
-  const LS = Math.round((d.loop * sr) / CR) * CR;
+  const LS = Math.round((loop * sr) / CR) * CR;
   const L = LS / sr;
   const A = Math.round((PRE * sr) / CR) * CR;
   const N = A + LS;
@@ -214,15 +231,17 @@ export function bowSample(sr: number, f: number, d: BowDef, loud: boolean, seed:
     return t;
   };
 
-  const P = d.players;
   for (let p = 0; p < P; p++) {
-    const solo = P === 1;
     const beta = d.beta[0] + (d.beta[1] - d.beta[0]) * (solo ? 0.5 : (r() + 1) / 2);
     const tab = T(beta);
-    // Vibrato: every player has a different speed, depth and phase; the frequency is set to a whole number of periods within the loop length
-    const vr = Math.max(1, Math.round(d.vibRate * (1 + r() * 0.07) * L)) / L;
-    const vd = d.vibDepth * (solo ? 1 : 0.9 + r() * 0.3);
+    // Vibrato: every player has a different speed, depth, phase and onset; the speed is a whole number of cycles within the loop length
+    const vr = Math.max(1, Math.round((solo ? soloRate : d.vibRate * pace * (1 + r() * 0.09)) * L)) / L;
+    const vd = d.vibDepth * (loud ? 1 : 0.9) * (solo ? 1 + r() * 0.08 : 0.9 + r() * 0.3);
     const vph = (r() + 1) * Math.PI;
+    const von = d.vibDelay * (solo ? 1 : 0.7 + 0.6 * Math.abs(r()));
+    // No two cycles alike: the speed wanders by a few percent and the depth by about a tenth, along four slow sinusoids whose period is the loop length.
+    // Each is [Hz, phase swing, depth swing, the two phases]; a phase swing of a·sin(2π·hz·t) moves the speed by up to a·hz / vr of itself (here 5%)
+    const wob: [number, number, number, number, number][] = [1, 2, 3, 4].map((k) => [k / L, (0.05 * r() * vr) / (k / L), 0.12 * r(), (r() + 1) * Math.PI, (r() + 1) * Math.PI]);
     // Intonation drift: three slow sinusoids whose period is the loop length
     const dr: [number, number, number][] = [1, 2, 3].map((k) => [k / L, d.drift * r() * 0.6, (r() + 1) * Math.PI]);
     // Bow-pressure swell: a very slow volume change (±5%)
@@ -231,8 +250,14 @@ export function bowSample(sr: number, f: number, d: BowDef, loud: boolean, seed:
     const on = solo ? 0 : ((r() + 1) / 2) * d.onset;
     const scoop = d.scoop * (0.6 + 0.4 * Math.abs(r()));
     const cents = (t: number, v: number) => {
-      let c = vd * v * (Math.sin(2 * Math.PI * vr * t + vph) + 0.12 * Math.sin(4 * Math.PI * vr * t + vph * 2));
-      for (const [hz, a, ph] of dr) c += a * Math.sin(2 * Math.PI * hz * t + ph);
+      let ph = 2 * Math.PI * vr * t + vph;
+      let g = 1;
+      for (const [hz, a, b, p1, p2] of wob) {
+        ph += a * Math.sin(2 * Math.PI * hz * t + p1);
+        g += b * Math.sin(2 * Math.PI * hz * t + p2);
+      }
+      let c = vd * v * g * (Math.sin(ph) + 0.12 * Math.sin(2 * ph));
+      for (const [hz, a, p2] of dr) c += a * Math.sin(2 * Math.PI * hz * t + p2);
       return c;
     };
     // Frequency fine-tuning: the sustain section's mean frequency times the loop length must come out to exactly a whole number of periods
@@ -255,7 +280,7 @@ export function bowSample(sr: number, f: number, d: BowDef, loud: boolean, seed:
       const t = (c * CR) / sr;
       const ta = t - on;
       if (ta < 0) continue;
-      const v = smooth((t - d.vibDelay) / 0.35);
+      const v = 0.75 * smooth((t - von) / VIB_GROW) + 0.25 * smooth((t - von) / (PRE - von));
       const sc = -scoop * Math.exp(-ta / 0.045);
       inc[c] = (F * Math.pow(2, (cents(t, v) + sc) / 1200)) / sr;
       // Attack: the bow grips the string (a hard bow overshoots a little and then comes back); after that comes a very slow bow-pressure swell
@@ -395,9 +420,9 @@ const section = (body: BodyDef, players: number): BowDef => ({
   players,
   spread: 9,
   drift: 6,
-  vibRate: 5.4,
-  vibDepth: 20,
-  vibDelay: 0.2,
+  vibRate: 5.8,
+  vibDepth: 22,
+  vibDelay: 0.12,
   beta: [0.07, 0.16],
   corner: [7, 14],
   noise: 0.1,
@@ -406,7 +431,7 @@ const section = (body: BodyDef, players: number): BowDef => ({
   onset: 0.04,
   scoop: 12,
   body,
-  loop: 1.6,
+  loop: 2,
 });
 
 const solo = (body: BodyDef, vibRate: number, vibDepth: number, beta: number, corner: [number, number], noise: number): BowDef => ({
@@ -415,7 +440,7 @@ const solo = (body: BodyDef, vibRate: number, vibDepth: number, beta: number, co
   drift: 3,
   vibRate,
   vibDepth,
-  vibDelay: 0.18,
+  vibDelay: 0.1,
   beta: [beta, beta],
   corner,
   noise,
@@ -424,7 +449,7 @@ const solo = (body: BodyDef, vibRate: number, vibDepth: number, beta: number, co
   onset: 0,
   scoop: 14,
   body,
-  loop: 1.5,
+  loop: 2,
 });
 
 export const BOWS = {
@@ -432,14 +457,14 @@ export const BOWS = {
   strings: { def: section(SECTION_BODY, 7), zone: 3, rate: 0.75, attack: 0.02, release: 0.4, loudAt: 0.72, glide: 0.09, level: 0.89 },
   /** The slow version of the string section (soft, long): the same samples */
   strPad: { def: section(SECTION_BODY, 7), zone: 3, rate: 0.75, attack: 0.6, release: 0.9, loudAt: 2, glide: 0.09, level: 0.81, share: 'strings' },
-  violin: { def: solo(VIOLIN_BODY, 5.6, 22, 0.113, [8, 16], 0.1), zone: 3, rate: 0.75, attack: 0.02, release: 0.25, loudAt: 0.72, glide: 0.09, level: 0.57 },
-  cello: { def: solo(CELLO_BODY, 5.2, 18, 0.12, [8, 16], 0.2), zone: 3, rate: 0.5, attack: 0.02, release: 0.3, loudAt: 0.72, glide: 0.09, level: 0.66 },
-  /** Folk fiddle: brighter, with faster vibrato */
-  fiddle: { def: solo(FIDDLE_BODY, 6.2, 12, 0.09, [11, 22], 0.12), zone: 3, rate: 0.75, attack: 0.015, release: 0.2, loudAt: 0.72, glide: 0.07, level: 0.6 },
-  /** Morin khuur: horsehair bow, lots of breath noise, wide slow vibrato */
-  morin: { def: solo(MORIN_BODY, 4.4, 26, 0.15, [6, 11], 0.14), zone: 3, rate: 0.75, attack: 0.03, release: 0.3, loudAt: 0.72, glide: 0.14, level: 0.81 },
+  violin: { def: solo(VIOLIN_BODY, 6.2, 27, 0.113, [8, 16], 0.1), zone: 3, rate: 0.75, attack: 0.02, release: 0.25, loudAt: 0.72, glide: 0.09, level: 0.57 },
+  cello: { def: solo(CELLO_BODY, 5.6, 24, 0.12, [8, 16], 0.2), zone: 3, rate: 0.5, attack: 0.02, release: 0.3, loudAt: 0.72, glide: 0.09, level: 0.66 },
+  /** Folk fiddle: brighter, with a faster, narrower vibrato that comes in later */
+  fiddle: { def: { ...solo(FIDDLE_BODY, 6.2, 12, 0.09, [11, 22], 0.12), vibDelay: 0.18 }, zone: 3, rate: 0.75, attack: 0.015, release: 0.2, loudAt: 0.72, glide: 0.07, level: 0.6 },
+  /** Morin khuur: horsehair bow, lots of breath noise, wide slow vibrato that comes in later */
+  morin: { def: { ...solo(MORIN_BODY, 4.4, 26, 0.15, [6, 11], 0.14), vibDelay: 0.18 }, zone: 3, rate: 0.75, attack: 0.03, release: 0.3, loudAt: 0.72, glide: 0.14, level: 0.81 },
   /** Cello section: five players, for sustained notes and harmony in the low-mid register (use cello for solos) */
-  celli: { def: { ...section(CELLO_BODY, 5), vibDepth: 16, corner: [7, 14], noise: 0.15 }, zone: 3, rate: 0.5, attack: 0.03, release: 0.4, loudAt: 0.72, glide: 0.1, level: 0.66 },
-  /** Double bass section: three players */
-  contrabass: { def: { ...section(BASS_BODY, 3), vibDepth: 8, corner: [8, 16], spread: 4 }, zone: 3, rate: 0.5, attack: 0.03, release: 0.35, loudAt: 0.72, glide: 0.1, level: 0.61 },
+  celli: { def: { ...section(CELLO_BODY, 5), vibRate: 5.5, vibDepth: 20, corner: [7, 14], noise: 0.15 }, zone: 3, rate: 0.5, attack: 0.03, release: 0.4, loudAt: 0.72, glide: 0.1, level: 0.66 },
+  /** Double bass section: three players, with a slower vibrato */
+  contrabass: { def: { ...section(BASS_BODY, 3), vibRate: 5, vibDepth: 14, corner: [8, 16], spread: 4 }, zone: 3, rate: 0.5, attack: 0.03, release: 0.35, loudAt: 0.72, glide: 0.1, level: 0.61 },
 } satisfies Record<string, BowInst>;
