@@ -3,7 +3,7 @@
 //
 //   track input ── filters ── duck ─┬─ pan ───────────────────────┐
 //                                   ├─ reverb send ── reverb ─────┤
-//                                   └─ delay send ─── delay ──────┼── master ── EQ ── glue ── (loud stage) ── output
+//                                   └─ delay send ─── delay ──────┼── master ── EQ ── glue ── (loud stage) ── gate ── output
 //                                                       └→ reverb │
 
 import { impulse, type Room } from '../instruments/dsp/reverb.ts';
@@ -14,6 +14,8 @@ import { createLoudStage } from './output.ts';
 export interface Mixer {
   /** The song's output (its fades are applied here) */
   output: GainNode;
+  /** Closes for the song's silences: after the reverb and delay, so their tails stop dead too */
+  gate: GainNode;
   /** One strip per track, per section: [intro tracks, body tracks] */
   strips: [Strip[], Strip[]];
 }
@@ -38,7 +40,9 @@ export function createMixer(ctx: BaseAudioContext, song: Song, destination: Audi
   const stepSeconds = 60 / song.bpm / 4;
   const output = ctx.createGain();
   output.connect(destination);
-  const master = createMaster(ctx, song, output);
+  const gate = ctx.createGain();
+  gate.connect(output);
+  const master = createMaster(ctx, song, gate);
   const reverb = createReverb(ctx, song, master);
   const delay = song.delay ? createDelay(ctx, song.delay, stepSeconds, master, reverb) : null;
   const strip = (track: Track): Strip => {
@@ -70,7 +74,7 @@ export function createMixer(ctx: BaseAudioContext, song: Song, destination: Audi
     if (delay && track.delay) send(ctx, out, delay, track.delay);
     return { input, output: out, pump, sweeps };
   };
-  return { output, strips: [(song.intro ?? []).map(strip), song.tracks.map(strip)] };
+  return { output, gate, strips: [(song.intro ?? []).map(strip), song.tracks.map(strip)] };
 }
 
 function send(ctx: BaseAudioContext, from: AudioNode, to: AudioNode, amount: number): void {

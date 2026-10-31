@@ -130,6 +130,22 @@ test('every pass of a section restarts its sweeps, gliding back in 20 ms, and a 
   assert.deepEqual(lowpassEvents(seeked.nodes), [fromSeek, fromSeek]);
 });
 
+test('a silence shuts the gate after the reverb on every pass, opens it just before the music returns, and holds it shut after a seek into it', () => {
+  // The last beat of the intro, and the third beat of the body
+  const stops = { ...song, silences: [{ bar: 1.75, beats: 1 }, { bar: 2.5, beats: 1 }] };
+  const gateEvents = (nodes: FakeNode[]) => nodes.filter((n) => n.gain.events.some(([m, v]) => m === 'linearRampToValueAtTime' && v === 0)).map((n) => rounded(n.gain.events));
+  const silence = (start: number, end: number) => [['setValueAtTime', 1, start], ['linearRampToValueAtTime', 0, start + 0.01], ['setValueAtTime', 0, end - 0.009], ['linearRampToValueAtTime', 1, end - 0.005]];
+  const played = fakeContext();
+  new Playback(played.ctx, played.ctx.destination, stops, { at: 1, loops: 2 }).schedule(100);
+  assert.deepEqual(gateEvents(played.nodes), [[...silence(2.5, 3), ...silence(4, 4.5), ...silence(6, 6.5)]]);
+
+  // From a quarter of a second into the body's silence: shut at once, then the next pass as usual
+  const seeked = fakeContext();
+  new Playback(seeked.ctx, seeked.ctx.destination, stops, { at: 10, from: 3.25, loops: 2 }).schedule(100);
+  const shut = [['setValueAtTime', 0, 10], ['setValueAtTime', 0, 10.241], ['linearRampToValueAtTime', 1, 10.245]];
+  assert.deepEqual(gateEvents(seeked.nodes), [[...shut, ...silence(11.75, 12.25)]]);
+});
+
 test('songs mastered loud bypass the shared output limiter; the others go through it', () => {
   assert.equal(mastersItself(song), false);
   assert.equal(mastersItself({ ...song, master: { warm: 2, glue: 0.4 } }), false);

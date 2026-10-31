@@ -14,6 +14,8 @@ export interface Song {
   bpm: number;
   /** Changes of tempo along the way: at once (a new section) or gliding (ritardando, accelerando) */
   tempo?: TempoChange[];
+  /** Dead stops: moments where everything falls silent, the room's echo too, before the music crashes back in */
+  silences?: Silence[];
   /** Time signature (default '4/4') */
   meter?: Meter;
   /** Eighth-note swing 0-0.5 (0.33 is roughly a triplet feel) */
@@ -64,6 +66,16 @@ export interface Track {
   params?: Record<string, number>;
   /** false: play once at the start of the section instead of repeating to fill it. Default true */
   repeat?: boolean;
+}
+
+/**
+ * A dead stop from `bar` (counted from 1 at the start of the song, the intro's bars first; fractional to start mid-bar, so 32.75 is the
+ * last beat of bar 32) for `beats` quarter notes. Everything falls silent, the reverb and delay tails too, as if the room were switched off,
+ * and comes back at full level when it ends. A silence in the body happens on every pass.
+ */
+export interface Silence {
+  bar: number;
+  beats: number;
 }
 
 export interface Reverb extends Room {
