@@ -26,6 +26,21 @@ music.play(theme); // starts on the first click or key press if the browser need
 
 Polyphon grew out of the music engine of [Eldor](https://github.com/alan890104/eldor), a creature-battle RPG.
 
+## Listen
+
+Every example, rendered by Polyphon itself (nothing here was recorded):
+
+| Song | What you hear | |
+| --- | --- | --- |
+| Morning Market | An original market tune in C major: marimba over pizzicato bass, shaker and a soft string bed | [▶ 0:24](docs/audio/morning-market.mp3) |
+| Night Waltz | An original waltz in A minor: piano over harp arpeggios, a string pad and cellos | [▶ 0:20](docs/audio/night-waltz.mp3) |
+| After Midnight | An original piano ballad in B minor over a slow R&B groove, with strings and a violin | [▶ 1:42](docs/audio/after-midnight.mp3) |
+| Neon Tide | An original progressive-house track in F minor: build, pumping supersaw drop, piano breakdown, final drop | [▶ 2:35](docs/audio/neon-tide.mp3) |
+| Moonlight Sonata | Beethoven, the opening of the first movement, on the modelled piano | [▶ 0:43](docs/audio/moonlight.mp3) |
+| Canon in D | Pachelbel, complete: three violins in canon over a cello ground | [▶ 4:08](docs/audio/canon.mp3) |
+| Canon in D Minor | The same canon moved into D minor, written as a transformation of the original | [▶ 4:08](docs/audio/canon-minor.mp3) |
+| Symphony No. 5 | Beethoven, the exposition of the first movement, for full orchestra | [▶ 1:19](docs/audio/symphony5.mp3) |
+
 ## What it does
 
 - **Notation that reads like music.** Melodies are short strings (`'E5:4 D5:2 C5:2 |'`), drum patterns are grids (`'X...x...'`), harmony is chord symbols (`'Am7 | D7 | Gmaj7'`). Pads, arpeggios, bass lines and strums grow out of a progression. Everything produces plain data, so you can also write notes yourself.

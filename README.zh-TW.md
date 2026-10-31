@@ -26,6 +26,21 @@ music.play(theme); // 瀏覽器要求使用者互動時，會在第一次點擊�
 
 Polyphon 源自生物對戰 RPG [Eldor（艾爾多）](https://github.com/alan890104/eldor) 的音樂引擎。
 
+## 聆聽
+
+所有範例都由 Polyphon 自己算出來（沒有任何錄音）：
+
+| 曲目 | 內容 | |
+| --- | --- | --- |
+| Morning Market | 原創，C 大調的市集小曲：馬林巴主旋律，撥奏低音、沙鈴與輕柔的弦樂 | [▶ 0:24](docs/audio/morning-market.mp3) |
+| Night Waltz | 原創，A 小調圓舞曲：鋼琴配豎琴琶音、弦樂墊音與大提琴 | [▶ 0:20](docs/audio/night-waltz.mp3) |
+| After Midnight | 原創，B 小調鋼琴抒情曲，慢速 R&B 律動，加上弦樂與小提琴 | [▶ 1:42](docs/audio/after-midnight.mp3) |
+| Neon Tide | 原創，F 小調前衛浩室：推升、抽吸的 supersaw drop、鋼琴間奏、最終 drop | [▶ 2:35](docs/audio/neon-tide.mp3) |
+| Moonlight Sonata | 貝多芬《月光》第一樂章開頭，用建模鋼琴演奏 | [▶ 0:43](docs/audio/moonlight.mp3) |
+| Canon in D | 帕海貝爾《卡農》全曲：三把小提琴輪唱，大提琴反覆低音 | [▶ 4:08](docs/audio/canon.mp3) |
+| Canon in D Minor | 同一首卡農移到 D 小調，以原曲轉換而成 | [▶ 4:08](docs/audio/canon-minor.mp3) |
+| Symphony No. 5 | 貝多芬《第五號交響曲》第一樂章呈示部，完整管弦樂團 | [▶ 1:19](docs/audio/symphony5.mp3) |
+
 ## 它能做什麼
 
 - **讀起來像樂譜的記譜法。** 旋律是短字串（`'E5:4 D5:2 C5:2 |'`），鼓是格子（`'X...x...'`），和聲是和弦記號（`'Am7 | D7 | Gmaj7'`）。墊音、琶音、低音線、刷弦都從和弦進行長出來。所有東西都是純資料，你也可以自己產生音符。
