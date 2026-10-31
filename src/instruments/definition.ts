@@ -5,8 +5,8 @@
 import type { Bowed, BowInst } from './bowed.ts';
 import type { Voice } from './voices.ts';
 
-/** Render one note: sample rate, MIDI pitch, variant index → mono, stereo, or a bowed sample with a loop section */
-export type Render = (sampleRate: number, midi: number, variant: number) => Float32Array | [Float32Array, Float32Array] | Bowed;
+/** Render one note: sample rate, MIDI pitch, variant index, desk (bowed strings: which players, see DESKS in bowed.ts; 0 otherwise) → mono, stereo, or a bowed sample with a loop section */
+export type Render = (sampleRate: number, midi: number, variant: number, desk: number) => Float32Array | [Float32Array, Float32Array] | Bowed;
 
 export interface SampledInstrument {
   kind: 'sample';

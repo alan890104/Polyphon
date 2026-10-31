@@ -182,26 +182,190 @@ function bodyModes(sr: number, b: BodyDef): Mode[] {
 const smooth = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
 /**
+ * Desks: tracks of one section that share a bowed instrument are different players. Two tracks on one sample are one player twice as loud:
+ * the same tuning, a vibrato moving in lockstep, heard as one violin slightly flanged. Each desk after the first has its own players: a fresh
+ * seed (vibrato wobble, drift, bow noise, scoop), and these differences from the first desk, kept inside what players in one section measure:
+ *   - intonation: unison violins in an orchestra measured 0-13 cents apart (σ per note, two players; 0.6-8.6 with three or four), each with a
+ *     steady tendency, one "generally a bit sharp", another "consistently flat" (Ioannou & Kob, ISMA 2019); listeners prefer a unison scatter
+ *     of 0-5 cents and tolerate 5-14 (Ternström & Sundberg, JASA 1988). A desk leans 3 cents sharp or flat, ±2 from note to note: 1-5 cents
+ *     from the first desk, 2-10 from each other, before the slow drift every player has;
+ *   - vibrato: violinists' rates run from about 5.5 Hz (students, Geringer & Allen, JRME 2004) to 6.3 (recorded soloists, Cheslock 1931,
+ *     Small 1937) and the extent is around 30 cents, 10-60 (Fletcher & Sanders, JASA 1967). A desk is 6% slower or faster (a violin's 6.2 Hz
+ *     becomes 5.8 or 6.6) and 10% narrower or wider, and starts a note 0.3 of a cycle or more away in phase from the other desks, so two desks
+ *     drift through and out of step instead of moving together;
+ *   - the bow: a desk grips the string a little slower or quicker, and lands a little behind the first desk (`lag`, see play.ts). Ensembles
+ *     measure 24-28 ms (string quartets, Wing et al. 2014) to 30-50 ms (trios, Rasch 1979) of onset scatter between parts; players of one part
+ *     following the same leader are tighter, so a desk lags 8-12 ms on average, never more than 18 ms on top of the usual humanize.
+ */
+export interface Desk {
+  /** Intonation (cents) from the first desk's mean pitch: a tendency, plus or minus 2 from note to note */
+  cents: number;
+  /** Vibrato speed and depth, as a factor of the first desk's */
+  rate: number;
+  depth: number;
+  /** Vibrato phase at the start of a note, from the first desk's (fraction of a cycle) */
+  phase: number;
+  /** How long the bow takes to grip the string, as a factor of the first desk's */
+  attack: number;
+  /** How far behind the first desk the bow lands on average (seconds); each note lands at half to one and a half times this */
+  lag: number;
+}
+
+/** The first desk plays the samples as they always were; a fourth track on an instrument sits at the first desk again, and so on round */
+export const DESKS: readonly Desk[] = [
+  { cents: 0, rate: 1, depth: 1, phase: 0, attack: 1, lag: 0 },
+  { cents: 3, rate: 0.94, depth: 1.1, phase: 0.35, attack: 1.2, lag: 0.008 },
+  { cents: -3, rate: 1.06, depth: 0.9, phase: 0.65, attack: 0.85, lag: 0.012 },
+];
+
+/** One player's part of a sample: bowing point, vibrato, drift, swell, tuning, timing and noise */
+interface Player {
+  beta: number;
+  /** Vibrato speed (Hz, whole cycles in the loop), depth (cents), phase, and when it begins (seconds) */
+  vr: number;
+  vd: number;
+  vph: number;
+  von: number;
+  wob: [number, number, number, number, number][];
+  dr: [number, number, number][];
+  bw: [number, number];
+  /** Fixed intonation offset (cents) */
+  det: number;
+  on: number;
+  scoop: number;
+  nOff: number;
+  nAmt: number;
+  /** Phase of the string at the start */
+  ph: number;
+}
+
+/**
+ * Draw one player in the order the samples have always drawn them, so the first desk renders exactly as before.
+ * `rate` is the vibrato speed the player varies around (a solo's is already this note's).
+ */
+function drawPlayer(r: () => number, d: BowDef, solo: boolean, rate: number, loud: boolean, LS: number, sr: number): Player {
+  const L = LS / sr;
+  const beta = d.beta[0] + (d.beta[1] - d.beta[0]) * (solo ? 0.5 : (r() + 1) / 2);
+  // Vibrato: every player has a different speed, depth, phase and onset; the speed is a whole number of cycles within the loop length
+  const vr = Math.max(1, Math.round((solo ? rate : rate * (1 + r() * 0.09)) * L)) / L;
+  const vd = d.vibDepth * (loud ? 1 : 0.9) * (solo ? 1 + r() * 0.08 : 0.9 + r() * 0.3);
+  const vph = (r() + 1) * Math.PI;
+  const von = d.vibDelay * (solo ? 1 : 0.7 + 0.6 * Math.abs(r()));
+  // No two cycles alike: the speed wanders by a few percent and the depth by about a tenth, along four slow sinusoids whose period is the loop length.
+  // Each is [Hz, phase swing, depth swing, the two phases]; a phase swing of a·sin(2π·hz·t) moves the speed by up to a·hz / vr of itself (here 5%)
+  const wob: [number, number, number, number, number][] = [1, 2, 3, 4].map((k) => [k / L, (0.05 * r() * vr) / (k / L), 0.12 * r(), (r() + 1) * Math.PI, (r() + 1) * Math.PI]);
+  // Intonation drift: three slow sinusoids whose period is the loop length
+  const dr: [number, number, number][] = [1, 2, 3].map((k) => [k / L, d.drift * r() * 0.6, (r() + 1) * Math.PI]);
+  // Bow-pressure swell: a very slow volume change (±5%)
+  const bw: [number, number] = [(1 + Math.round((r() + 1) * 1.5)) / L, (r() + 1) * Math.PI];
+  const det = solo ? 0 : d.spread * r() * 1.2;
+  const on = solo ? 0 : ((r() + 1) / 2) * d.onset;
+  const scoop = d.scoop * (0.6 + 0.4 * Math.abs(r()));
+  const nOff = Math.floor(((r() + 1) / 2) * LS);
+  const nAmt = d.noise * (loud ? 1.35 : 1) * (solo ? 1 : 0.8 + 0.4 * Math.abs(r()));
+  const ph = (r() + 1) / 2;
+  return { beta, vr, vd, vph, von, wob, dr, bw, det, on, scoop, nOff, nAmt, ph };
+}
+
+/** A player's pitch (cents from the note) at time t, with the vibrato grown in to v (0-1) */
+function centsOf(p: Player): (t: number, v: number) => number {
+  const { vr, vd, vph, wob, dr } = p;
+  return (t, v) => {
+    let ph = 2 * Math.PI * vr * t + vph;
+    let g = 1;
+    for (const [hz, a, b, p1, p2] of wob) {
+      ph += a * Math.sin(2 * Math.PI * hz * t + p1);
+      g += b * Math.sin(2 * Math.PI * hz * t + p2);
+    }
+    let c = vd * v * g * (Math.sin(ph) + 0.12 * Math.sin(2 * ph));
+    for (const [hz, a, p2] of dr) c += a * Math.sin(2 * Math.PI * hz * t + p2);
+    return c;
+  };
+}
+
+/** The mean frequency ratio over the sustain section (the vibrato and drift, at full depth) */
+function meanRatio(cents: (t: number, v: number) => number, L: number): number {
+  let m = 0;
+  const S = 2048;
+  for (let i = 0; i < S; i++) m += Math.pow(2, cents(PRE + (i / S) * L, 1) / 1200);
+  return m / S;
+}
+
+/** Samples in a loop of this many seconds: the attack section and the loop section are both integer multiples of CR, so the modulation's sample grid lines up at the loop's head and tail */
+const loopSamples = (sr: number, seconds: number) => Math.round((seconds * sr) / CR) * CR;
+
+/** A solo's vibrato speed for this note (a lighter bow goes with a slightly slower and narrower vibrato, and it varies a little from note to note); the first draw of its seed */
+const soloRate = (r: () => number, d: BowDef, loud: boolean) => d.vibRate * (loud ? 1 : 0.96) * (1 + 0.04 * r());
+
+/** A solo's loop: a whole number of its vibrato cycles */
+const soloLoop = (sr: number, d: BowDef, rate: number, cycles = Math.round(rate * d.loop)) => loopSamples(sr, Math.max(1, cycles) / rate);
+
+/** The first desk's solo for a note, replayed without rendering: the mean frequency of its sustain (Hz) and its vibrato phase */
+function firstDesk(sr: number, f: number, d: BowDef, loud: boolean, seed: number): { mean: number; vph: number; rate: number } {
+  const r = rng(seed * 7919 + Math.round(f * 13));
+  const rate = soloRate(r, d, loud);
+  const LS = soloLoop(sr, d, rate);
+  // The bow noise takes the next LS draws
+  for (let i = 0; i < LS; i++) r();
+  const p = drawPlayer(r, d, true, rate, loud, LS, sr);
+  const L = LS / sr;
+  // Its frequency is fitted to a whole number of periods in the loop (see below), so its mean is that number over the loop length
+  return { mean: Math.round(f * meanRatio(centsOf(p), L) * L) / L, vph: p.vph, rate };
+}
+
+/**
  * Compute one bowed-string sample. f is the pitch (Hz), loud decides bow pressure (brightness, bow noise, attack), and seed makes the players different for every note.
+ * desk picks the players (see DESKS): 0 is the first desk.
  * The returned sample can loop seamlessly across the loop interval.
  */
-export function bowSample(sr: number, f: number, d: BowDef, loud: boolean, seed: number): Bowed {
-  const r = rng(seed * 7919 + Math.round(f * 13));
+export function bowSample(sr: number, f: number, d: BowDef, loud: boolean, seed: number, desk = 0): Bowed {
+  const dk = DESKS[desk % DESKS.length];
+  let r = rng(seed * 7919 + Math.round(f * 13));
   const P = d.players;
   const solo = P === 1;
-  // Vibrato speed: a lighter bow goes with a slightly slower and narrower vibrato. A solo varies a little from note to note and its loop is cut
-  // to a whole number of its cycles; in a section each player has their own speed, rounded to whole cycles in the loop
-  const pace = loud ? 1 : 0.96;
-  const soloRate = d.vibRate * pace * (1 + 0.04 * r());
-  const loop = solo ? Math.max(1, Math.round(soloRate * d.loop)) / soloRate : d.loop;
-  // The attack section and the loop section are both integer multiples of CR, so the modulation's sample grid lines up at the loop's head and tail
-  const LS = Math.round((loop * sr) / CR) * CR;
+  // Vibrato speed: a solo varies a little from note to note and its loop is cut to a whole number of its cycles; in a section each player has
+  // their own speed, rounded to whole cycles in the loop
+  const rate = soloRate(r, d, loud);
+  /** The players' draws: the first desk takes them from the same stream as everything else, another desk from its own */
+  let rp = r;
+  let LS = solo ? soloLoop(sr, d, rate) : loopSamples(sr, d.loop);
+  /** A section desk after the first: how far its players lean from the first desk's (cents) */
+  let deskCents = 0;
+  /** A solo desk after the first: its vibrato phase and the mean frequency of its sustain (Hz) */
+  let deskSolo: { vph: number; mean: number } | undefined;
+  if (dk !== DESKS[0]) {
+    const ds = seed * 7919 + Math.round(f * 13) + desk * 104729;
+    r = rng(ds);
+    rp = rng(ds + 1);
+    const cents = dk.cents + 2 * r();
+    if (!solo) deskCents = cents;
+    else {
+      // Its own vibrato, starting away from the first desk's. The loop holds whole vibrato cycles and whole periods of the string, and a
+      // period is long for a low note (an A3 in a 2 s loop moves 4 cents a period, a cello's C2 13): of loops a few cycles shorter or
+      // longer, take the one whose whole number of periods lands closest to the intended pitch
+      const first = firstDesk(sr, f, d, loud, seed);
+      const own = first.rate * dk.rate;
+      const goal = first.mean * Math.pow(2, cents / 1200);
+      let best = Infinity;
+      const base = Math.round(own * d.loop);
+      for (let c = Math.max(1, base - 3); c <= base + 3; c++) {
+        const ls = soloLoop(sr, d, own, c);
+        const L = ls / sr;
+        const miss = Math.abs(Math.round(goal * L) / L / goal - 1) + Math.abs(c - base) * 1e-5;
+        if (miss < best) {
+          best = miss;
+          LS = ls;
+        }
+      }
+      deskSolo = { vph: first.vph + 2 * Math.PI * dk.phase, mean: Math.round(goal * (LS / sr)) / (LS / sr) };
+    }
+  }
   const L = LS / sr;
   const A = Math.round((PRE * sr) / CR) * CR;
   const N = A + LS;
   const sum = new Float32Array(N);
   const corner = loud ? d.corner[1] : d.corner[0];
-  const atk = loud ? d.attack[1] : d.attack[0];
+  const atk = (loud ? d.attack[1] : d.attack[0]) * dk.attack;
   const maxF = sr * 0.4;
 
   // All players share one stretch of bow noise whose period is the loop length (each reads from a different position): high-pass then low-pass, running two passes so the filter state joins up head to tail.
@@ -234,45 +398,21 @@ export function bowSample(sr: number, f: number, d: BowDef, loud: boolean, seed:
     return t;
   };
 
+  /** The speed each player's vibrato varies around: a solo's is this note's */
+  const vibRate = (solo ? rate : d.vibRate * (loud ? 1 : 0.96)) * dk.rate;
   for (let p = 0; p < P; p++) {
-    const beta = d.beta[0] + (d.beta[1] - d.beta[0]) * (solo ? 0.5 : (r() + 1) / 2);
+    const pl = drawPlayer(rp, d, solo, vibRate, loud, LS, sr);
+    if (deskSolo) pl.vph = deskSolo.vph;
+    pl.vd *= dk.depth;
+    const { beta, von, bw, on, scoop, nOff, nAmt } = pl;
     const tab = T(beta);
-    // Vibrato: every player has a different speed, depth, phase and onset; the speed is a whole number of cycles within the loop length
-    const vr = Math.max(1, Math.round((solo ? soloRate : d.vibRate * pace * (1 + r() * 0.09)) * L)) / L;
-    const vd = d.vibDepth * (loud ? 1 : 0.9) * (solo ? 1 + r() * 0.08 : 0.9 + r() * 0.3);
-    const vph = (r() + 1) * Math.PI;
-    const von = d.vibDelay * (solo ? 1 : 0.7 + 0.6 * Math.abs(r()));
-    // No two cycles alike: the speed wanders by a few percent and the depth by about a tenth, along four slow sinusoids whose period is the loop length.
-    // Each is [Hz, phase swing, depth swing, the two phases]; a phase swing of a·sin(2π·hz·t) moves the speed by up to a·hz / vr of itself (here 5%)
-    const wob: [number, number, number, number, number][] = [1, 2, 3, 4].map((k) => [k / L, (0.05 * r() * vr) / (k / L), 0.12 * r(), (r() + 1) * Math.PI, (r() + 1) * Math.PI]);
-    // Intonation drift: three slow sinusoids whose period is the loop length
-    const dr: [number, number, number][] = [1, 2, 3].map((k) => [k / L, d.drift * r() * 0.6, (r() + 1) * Math.PI]);
-    // Bow-pressure swell: a very slow volume change (±5%)
-    const bw: [number, number] = [(1 + Math.round((r() + 1) * 1.5)) / L, (r() + 1) * Math.PI];
-    const det = solo ? 0 : d.spread * r() * 1.2;
-    const on = solo ? 0 : ((r() + 1) / 2) * d.onset;
-    const scoop = d.scoop * (0.6 + 0.4 * Math.abs(r()));
-    const cents = (t: number, v: number) => {
-      let ph = 2 * Math.PI * vr * t + vph;
-      let g = 1;
-      for (const [hz, a, b, p1, p2] of wob) {
-        ph += a * Math.sin(2 * Math.PI * hz * t + p1);
-        g += b * Math.sin(2 * Math.PI * hz * t + p2);
-      }
-      let c = vd * v * g * (Math.sin(ph) + 0.12 * Math.sin(2 * ph));
-      for (const [hz, a, p2] of dr) c += a * Math.sin(2 * Math.PI * hz * t + p2);
-      return c;
-    };
+    const cents = centsOf(pl);
     // Frequency fine-tuning: the sustain section's mean frequency times the loop length must come out to exactly a whole number of periods
-    let m = 0;
-    const S = 2048;
-    for (let i = 0; i < S; i++) m += Math.pow(2, cents(PRE + (i / S) * L, 1) / 1200);
-    m /= S;
-    const target = f * Math.pow(2, det / 1200);
-    const F = Math.max(1, Math.round(target * m * L)) / (m * L);
+    // (a solo desk after the first has picked its loop for that: its mean frequency is already a whole number of periods)
+    const m = meanRatio(cents, L);
+    const target = f * Math.pow(2, (pl.det + deskCents) / 1200);
+    const F = deskSolo ? deskSolo.mean / m : Math.max(1, Math.round(target * m * L)) / (m * L);
 
-    const nOff = Math.floor(((r() + 1) / 2) * LS);
-    const nAmt = d.noise * (loud ? 1.35 : 1) * (solo ? 1 : 0.8 + 0.4 * Math.abs(r()));
     const slip = beta;
     const amp = solo ? 1 : 1 / Math.sqrt(P);
     // Control rate: once every CR samples compute the frequency (the phase increment per sample) and the volume
@@ -291,7 +431,7 @@ export function bowSample(sr: number, f: number, d: BowDef, loud: boolean, seed:
       if (loud) e *= 1 + 0.22 * e * Math.exp(-Math.max(0, ta - atk) / 0.08);
       env[c] = amp * e * (1 + 0.05 * Math.sin(2 * Math.PI * bw[0] * t + bw[1]));
     }
-    let ph = (r() + 1) / 2;
+    let ph = pl.ph;
     const i0 = Math.floor((on * sr) / CR) * CR;
     for (let i = i0; i < N; i++) {
       const c = (i / CR) | 0;

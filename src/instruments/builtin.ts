@@ -169,7 +169,7 @@ const BOWED = Object.fromEntries(
     const key = 'share' in b ? b.share : name;
     let seed = 0;
     for (const ch of key) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
-    const render: Render = (sr, m, v) => bowSample(sr, f0(m), b.def, v === 1, seed + m * 101 + v);
+    const render: Render = (sr, m, v, desk) => bowSample(sr, f0(m), b.def, v === 1, seed + m * 101 + v, desk);
     return [name, { kind: 'sample', render, hold: 'damp', level: b.level, release: b.release, bow: { ...b, name: key }, glide: BOWED_GLIDERS.has(name) }];
   }),
 ) as Record<keyof typeof BOWS, SampledInstrument>;

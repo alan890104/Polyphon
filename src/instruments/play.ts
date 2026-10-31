@@ -1,5 +1,6 @@
 // Play one note on any instrument: a cached sample, a bowed sample with a looping sustain, or a live voice.
 
+import { DESKS } from './bowed.ts';
 import { midiToFrequency, type SampledInstrument } from './definition.ts';
 import { getInstrument } from './registry.ts';
 import { getSample, hasSample, loopOf, sampleMidi } from './samples.ts';
@@ -19,6 +20,8 @@ export interface NoteCall {
   bends?: [number, number][];
   /** The track's instrument parameters */
   params?: Readonly<Record<string, number>>;
+  /** Bowed strings: the desk (players) of the track, 0 for the first (see deskList in compile.ts) */
+  desk?: number;
 }
 
 /** Play one note */
@@ -111,9 +114,14 @@ function playBow(def: SampledInstrument, name: string, c: NoteCall, amp: number)
   const o = c.params ?? {};
   let loud = c.vel * (o.bright ?? 1) > bw.loudAt ? 1 : 0;
   const root = sampleMidi(def, c.m);
-  // If this layer is not prepared but the other one is: use the other for now, rather than rendering during playback (that would stall)
-  if (!hasSample(c.ctx.sampleRate, def, name, c.m, loud) && hasSample(c.ctx.sampleRate, def, name, c.m, 1 - loud)) loud = 1 - loud;
-  const b = getSample(c.ctx, def, name, c.m, loud);
+  // If this layer is not prepared but the other one is: use the other for now, rather than rendering during playback (that would stall);
+  // a desk with neither prepared borrows the first desk's players
+  const has = (layer: number, desk: number) => hasSample(c.ctx.sampleRate, def, name, c.m, layer, desk);
+  const seat = DESKS[(c.desk ?? 0) % DESKS.length];
+  let desk = DESKS.indexOf(seat);
+  if (desk && !has(0, desk) && !has(1, desk) && (has(0, 0) || has(1, 0))) desk = 0;
+  if (!has(loud, desk) && has(1 - loud, desk)) loud = 1 - loud;
+  const b = getSample(c.ctx, def, name, c.m, loud, desk);
   const src = c.ctx.createBufferSource();
   src.buffer = b;
   const lp = loopOf(b);
@@ -129,13 +137,15 @@ function playBow(def: SampledInstrument, name: string, c: NoteCall, amp: number)
   const a = Math.max(0.005, o.attack ?? bw.attack);
   const r = o.release ?? bw.release;
   const off = c.t + Math.max(c.dur, 0.06);
+  // A desk after the first lands its bow a little behind the first desk's, by a different amount every note; it lifts it with the others
+  const t = c.t + (seat.lag && seat.lag * (0.5 + Math.random()));
   const g = c.ctx.createGain();
   const p = g.gain;
-  p.setValueAtTime(0, c.t);
-  p.linearRampToValueAtTime(amp, c.t + Math.min(a, Math.max(0.005, off - c.t)));
+  p.setValueAtTime(0, t);
+  p.linearRampToValueAtTime(amp, t + Math.min(a, Math.max(0.005, off - t)));
   p.setValueAtTime(amp, off);
   p.setTargetAtTime(1e-4, off, r / 4);
   src.connect(g).connect(c.out);
-  src.start(c.t);
+  src.start(t);
   src.stop(off + r * 1.6 + 0.02);
 }
