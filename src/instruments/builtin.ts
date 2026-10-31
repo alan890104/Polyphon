@@ -102,6 +102,7 @@ const SAMPLED = {
   woodblock: D('woodblock', 0.4),
   clave: D('clave', 0.3, 75),
   anvil: D('anvil', 0.3),
+  triangle: D('triangle', 0.22, 81, 3, stroke(20000, 0.3)),
   gong: D('gong', 0.5, undefined, 1),
   thunder: D('thunder', 0.6, 30, 2),
   thunderclap: D('thunderclap', 0.8, 30, 2),

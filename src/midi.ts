@@ -280,4 +280,6 @@ const DRUMS: Record<number, [BuiltInInstrument, string, boolean]> = {
   77: ['woodblock', 'Wood block', true],
   78: ['darbuka', 'Cuica', true],
   79: ['darbuka', 'Cuica', true],
+  80: ['triangle', 'Triangle', false],
+  81: ['triangle', 'Triangle', false],
 };

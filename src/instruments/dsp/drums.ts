@@ -358,6 +358,21 @@ export const DRUMS = {
     const f = pitchOf(m, 1320);
     return modal(sr, f, [[1, 1, 1.8], [2.03, 0.5, 1.2], [3.31, 0.35, 0.8], [4.62, 0.2, 0.5], [6.9, 0.12, 0.3]], { len: 2, beat: 3, click: { amp: 0.8, t: 0.012, hz: 5000, q: 0.6 }, seed: s });
   },
+  /**
+   * Triangle: a steel rod bent into three sides, struck with a steel beater. Its modes are a free bar's (1 : 2.76 : 5.40 : 8.93 …), each
+   * split in two by the bends (vibrating in the plane and across it), so it has no clear pitch; the strongest lie between 2 and 10 kHz
+   * and ring for seconds, the highest fade first, and the beater's strike clicks
+   */
+  triangle: (sr, _m, s) => {
+    const r = rng(s + 3);
+    const parts: ModalPartial[] = [];
+    for (const [i, ratio] of [1, 2.756, 5.404, 8.933, 13.34, 18.64, 24.81, 31.87, 39.81].entries()) {
+      const amp = i === 0 ? 0.15 : i < 6 ? 1 : 0.6;
+      const t60 = i < 2 ? 3 : 6 - i * 0.55;
+      for (const split of [1, 1.04 + r() * 0.02]) parts.push([ratio * split, amp * (0.8 + 0.2 * r()), t60 * (1 + 0.15 * r())]);
+    }
+    return modal(sr, 405 + r() * 8, parts, { len: 5, beat: 2, click: { amp: 0.5, t: 0.002, hz: 9000, q: 0.7 }, seed: s });
+  },
   /** Gong (tam-tam): a metallic cloud that slowly blooms */
   gong: (sr, m, s) => {
     const f = pitchOf(m, 90);

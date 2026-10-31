@@ -1,6 +1,6 @@
 # Polyphon
 
-**Music for the browser, written as code.** A score notation, a synthesized orchestra of 119 instruments and a scheduler, on top of the Web Audio API. There are no audio files: every note is computed in the browser.
+**Music for the browser, written as code.** A score notation, a synthesized orchestra of 120 instruments and a scheduler, on top of the Web Audio API. There are no audio files: every note is computed in the browser.
 
 [繁體中文](README.zh-TW.md)
 
@@ -248,7 +248,7 @@ The Jukebox creates its `AudioContext` on first use and starts it on the first c
 | Bass | `bass` `synthBass` `reese` `acid` `bass808` `sub` `distBass` |
 | Drums | `kick` `boom` `snare` `field` `rim` `clap` `hat` `ohat` `ride` `crash` `swell` `tom` `taiko` `timpani` `frame` `darbuka` |
 | Electronic drums | `kick808` `kick909` `bigKick` `snare909` `clap909` `hat909` `ohat909` |
-| Percussion | `shaker` `tamb` `woodblock` `clave` `anvil` `gong` `chain` `snap` `brush` `drip` `thunder` `thunderclap` |
+| Percussion | `shaker` `tamb` `woodblock` `clave` `anvil` `triangle` `gong` `chain` `snap` `brush` `drip` `thunder` `thunderclap` |
 | Ambience and effects | `wind` `sea` `fire` `crickets` `rain` `void` `cave` `birds` `riser` `downlifter` `impact` |
 
 How they are made:

@@ -1,6 +1,6 @@
 # Polyphon
 
-**用程式碼寫音樂，在瀏覽器裡演奏。** 一套記譜語法、一支 119 種樂器的合成樂團，加上一個排程器，全部建立在 Web Audio API 上。沒有任何音檔：每個音都是在瀏覽器裡算出來的。
+**用程式碼寫音樂，在瀏覽器裡演奏。** 一套記譜語法、一支 120 種樂器的合成樂團，加上一個排程器，全部建立在 Web Audio API 上。沒有任何音檔：每個音都是在瀏覽器裡算出來的。
 
 [English](README.md)
 
@@ -248,7 +248,7 @@ Jukebox 會在第一次使用時建立 `AudioContext`，並在第一次點擊、
 | 低音 | `bass` `synthBass` `reese` `acid` `bass808` `sub` `distBass` |
 | 鼓 | `kick` `boom` `snare` `field` `rim` `clap` `hat` `ohat` `ride` `crash` `swell` `tom` `taiko` `timpani` `frame` `darbuka` |
 | 電子鼓 | `kick808` `kick909` `bigKick` `snare909` `clap909` `hat909` `ohat909` |
-| 打擊 | `shaker` `tamb` `woodblock` `clave` `anvil` `gong` `chain` `snap` `brush` `drip` `thunder` `thunderclap` |
+| 打擊 | `shaker` `tamb` `woodblock` `clave` `anvil` `triangle` `gong` `chain` `snap` `brush` `drip` `thunder` `thunderclap` |
 | 環境音與效果 | `wind` `sea` `fire` `crickets` `rain` `void` `cave` `birds` `riser` `downlifter` `impact` |
 
 它們是怎麼做的：

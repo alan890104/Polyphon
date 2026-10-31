@@ -34,7 +34,7 @@ export type Drum = 'low' | 'mid' | 'high';
 const DRUMS: Record<Drum, readonly string[]> = {
   low: ['kick', 'boom', 'kick909', 'bigKick', 'gong', 'thunder', 'thunderclap', 'impact'],
   mid: ['snare', 'snare909', 'field', 'rim', 'clap', 'clap909', 'snap', 'brush', 'woodblock', 'clave', 'anvil', 'chain', 'drip'],
-  high: ['hat', 'ohat', 'hat909', 'ohat909', 'ride', 'crash', 'swell', 'shaker', 'tamb'],
+  high: ['hat', 'ohat', 'hat909', 'ohat909', 'ride', 'crash', 'swell', 'shaker', 'tamb', 'triangle'],
 };
 const UNPITCHED = new Map(Object.entries(DRUMS).flatMap(([drum, names]) => names.map((name) => [name, drum as Drum])));
 /** Ambience beds: a looped texture with no notes to show */
