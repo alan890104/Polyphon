@@ -1,7 +1,6 @@
 // Every example song, grouped into playlists (the player shows these).
 
 import type { Song } from 'polyphon';
-import { eldorPlaylists } from './eldor/index.ts';
 
 export interface Playlist {
   id: string;
@@ -32,5 +31,4 @@ export const playlists: Playlist[] = [
       { id: 'after-midnight', load: () => load(import('./demo/after-midnight.ts')) },
     ],
   },
-  ...eldorPlaylists,
 ];

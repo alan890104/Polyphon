@@ -1,6 +1,6 @@
 // The visualizer's development harness (player/visuals.html): plays an example song through a Jukebox with an analyser and
 // mounts the immersive view on its own, to work on the visuals and screenshot them without the main app.
-// URL parameters: song (an example id such as moonlight or eldor-boss; default after-midnight), from (seconds), and style,
+// URL parameters: song (an example id such as moonlight or neon-tide; default after-midnight), from (seconds), and style,
 // background, theme to override the stored settings. window.harness drives it from the console or an end-to-end script.
 
 import { Jukebox, songDuration, type JukeboxState, type Playback, type Song } from 'polyphon';

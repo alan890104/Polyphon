@@ -14,5 +14,5 @@ test('every example song loads, compiles and has a length', async () => {
       count++;
     }
   }
-  assert.ok(count >= 50, `only ${count} example songs`);
+  assert.ok(count >= 5, `only ${count} example songs`);
 });
