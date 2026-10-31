@@ -1,5 +1,6 @@
 // Compile a song's sections into flat, time-sorted note lists, and list the samples a song needs rendered.
 
+import { DESKS } from '../instruments/bowed.ts';
 import type { SampledInstrument } from '../instruments/definition.ts';
 import { getInstrument } from '../instruments/registry.ts';
 import { bowLayers, type SampleRequest } from '../instruments/samples.ts';
@@ -26,6 +27,8 @@ export interface CompiledSection {
   notes: ScheduledNote[];
   /** For each track, the tracks that duck under its hits */
   ducks: number[][];
+  /** For each track, the desk it plays at (see deskList) */
+  desks: number[];
 }
 
 /** Compile one section into sorted notes; shorter tracks repeat to fill the whole section */
@@ -62,7 +65,7 @@ export function compileSection(tracks: Song['tracks'], meter: Meter): CompiledSe
     }
   });
   notes.sort((a, b) => a.time - b.time);
-  return { duration, notes, ducks: duckLists(tracks) };
+  return { duration, notes, ducks: duckLists(tracks), desks: deskList(tracks) };
 }
 
 /** For each track, the tracks that duck under its hits (a pad with `duck: 'Kick'` is on the kick's list) */
@@ -78,24 +81,44 @@ function duckLists(tracks: Track[]): number[][] {
   return ducks;
 }
 
+/**
+ * For each track, the desk it plays at. Tracks of one section that share a bowed instrument (or its samples: strPad plays the strings') are
+ * different players, as the desks of a string section are: the first sits at desk 0 and sounds as a lone track always has, the next at desk 1
+ * with its own tuning, vibrato and bow (see DESKS), then desk 2, and round again. Other tracks are at desk 0.
+ */
+export function deskList(tracks: Track[]): number[] {
+  const seated = new Map<string, number>();
+  return tracks.map((track) => {
+    const def = getInstrument(track.instrument);
+    if (def.kind !== 'sample' || !def.bow) return 0;
+    const k = seated.get(def.bow.name) ?? 0;
+    seated.set(def.bow.name, k + 1);
+    return k % DESKS.length;
+  });
+}
+
 /** Every sample a song will play, so they can be rendered before it starts */
 export function sampleRequests(song: Song): SampleRequest[] {
   const out = new Map<string, SampleRequest>();
   const meter = song.meter ?? 16;
-  for (const track of [...(song.intro ?? []), ...song.tracks]) {
-    const def = getInstrument(track.instrument);
-    if (def.kind !== 'sample') continue;
-    for (const n of trackPart(track, meter).notes) {
-      for (const m of n.pitches.length ? n.pitches : [0]) {
-        const midi = m + (track.transpose ?? 0);
-        if (def.bow) {
-          // Bowed strings: only the velocity layers that will be used
-          for (const layer of bowLayers(def, n.velocity, track.params?.bright)) out.set(`${track.instrument}|${midi}|${layer}`, request(def, track.instrument, midi, layer));
-        } else out.set(`${track.instrument}|${midi}`, request(def, track.instrument, midi));
+  for (const tracks of [song.intro ?? [], song.tracks]) {
+    const desks = deskList(tracks);
+    tracks.forEach((track, ti) => {
+      const def = getInstrument(track.instrument);
+      if (def.kind !== 'sample') return;
+      const desk = desks[ti];
+      for (const n of trackPart(track, meter).notes) {
+        for (const m of n.pitches.length ? n.pitches : [0]) {
+          const midi = m + (track.transpose ?? 0);
+          if (def.bow) {
+            // Bowed strings: only the velocity layers that will be used, at the track's desk
+            for (const layer of bowLayers(def, n.velocity, track.params?.bright)) out.set(`${track.instrument}|${midi}|${layer}|${desk}`, request(def, track.instrument, midi, layer, desk));
+          } else out.set(`${track.instrument}|${midi}`, request(def, track.instrument, midi));
+        }
       }
-    }
+    });
   }
   return [...out.values()];
 }
 
-const request = (def: SampledInstrument, name: string, midi: number, layer?: number): SampleRequest => ({ def, name, midi, layer });
+const request = (def: SampledInstrument, name: string, midi: number, layer?: number, desk?: number): SampleRequest => ({ def, name, midi, layer, desk });

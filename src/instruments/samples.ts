@@ -10,6 +10,8 @@ export interface SampleRequest {
   midi: number;
   /** Only this layer (bowed strings pick soft or hard by velocity) */
   layer?: number;
+  /** Bowed strings: the desk (players) of the track that plays it, 0 for the first */
+  desk?: number;
 }
 
 const cache = new Map<string, AudioBuffer>();
@@ -18,7 +20,7 @@ const loops = new WeakMap<AudioBuffer, [number, number]>();
 
 /** Bowed samples share a cache entry when one instrument borrows another's players (strPad uses strings) */
 const sampleName = (def: SampledInstrument, name: string) => def.bow?.name ?? name;
-const keyOf = (sampleRate: number, name: string, midi: number, variant: number) => `${sampleRate}|${name}|${midi}|${variant}`;
+const keyOf = (sampleRate: number, name: string, midi: number, variant: number, desk: number) => `${sampleRate}|${name}|${midi}|${variant}${desk ? `|${desk}` : ''}`;
 
 /** The pitch actually rendered: bowed strings sample every few semitones, fixed-pitch drums always use one note */
 export function sampleMidi(def: SampledInstrument, midi: number): number {
@@ -53,23 +55,27 @@ export function bowLayers(def: SampledInstrument, velocity: number, bright = 1):
 /** How many variants of a sampled instrument to precompute (random variants for drums; the soft and hard layers for bowed strings) */
 export const variantsOf = (def: SampledInstrument): number => (def.bow ? 2 : (def.variants ?? 1));
 
+/** Only bowed strings have desks (different players for tracks that share an instrument) */
+const deskOf = (def: SampledInstrument, desk: number) => (def.bow ? desk : 0);
+
 /** Whether a sample is already rendered */
-export function hasSample(sampleRate: number, def: SampledInstrument, name: string, midi: number, variant: number): boolean {
-  return cache.has(keyOf(sampleRate, sampleName(def, name), sampleMidi(def, midi), variant));
+export function hasSample(sampleRate: number, def: SampledInstrument, name: string, midi: number, variant: number, desk = 0): boolean {
+  return cache.has(keyOf(sampleRate, sampleName(def, name), sampleMidi(def, midi), variant, deskOf(def, desk)));
 }
 
 /** The loop section (seconds) of a bowed sample, if it has one */
 export const loopOf = (buffer: AudioBuffer): [number, number] | undefined => loops.get(buffer);
 
 /** Render (or fetch from the cache) a sample */
-export function getSample(ctx: BaseAudioContext, def: SampledInstrument, name: string, midi: number, variant = 0): AudioBuffer {
+export function getSample(ctx: BaseAudioContext, def: SampledInstrument, name: string, midi: number, variant = 0, desk = 0): AudioBuffer {
   const mm = sampleMidi(def, midi);
   const v = variant % variantsOf(def);
-  const k = keyOf(ctx.sampleRate, sampleName(def, name), mm, v);
+  const dk = deskOf(def, desk);
+  const k = keyOf(ctx.sampleRate, sampleName(def, name), mm, v, dk);
   let b = cache.get(k);
   if (!b) {
     const sr = def.bow ? Math.round(ctx.sampleRate * def.bow.rate) : ctx.sampleRate;
-    const data = def.render(sr, mm, v);
+    const data = def.render(sr, mm, v, dk);
     const chans = data instanceof Float32Array ? [data] : Array.isArray(data) ? data : [data.data];
     // One NaN would circulate through the reverb and delay feedback and silence the whole mix for good
     for (const d of chans) for (let i = 0; i < d.length; i++) if (!Number.isFinite(d[i])) d[i] = 0;
@@ -95,10 +101,10 @@ function* variantsToRender(def: SampledInstrument, layer: number | undefined): G
 /** Render samples ahead of time; after more than 12 ms of continuous work, yield the main thread for a moment (so the screen does not stall) */
 export async function prepareSamples(ctx: BaseAudioContext, requests: Iterable<SampleRequest>): Promise<void> {
   let last = performance.now();
-  for (const { def, name, midi, layer } of requests) {
+  for (const { def, name, midi, layer, desk } of requests) {
     for (const v of variantsToRender(def, layer)) {
-      if (hasSample(ctx.sampleRate, def, name, midi, v)) continue;
-      getSample(ctx, def, name, midi, v);
+      if (hasSample(ctx.sampleRate, def, name, midi, v, desk)) continue;
+      getSample(ctx, def, name, midi, v, desk);
       if (performance.now() - last > 12) {
         await new Promise((r) => setTimeout(r, 0));
         last = performance.now();
@@ -109,5 +115,5 @@ export async function prepareSamples(ctx: BaseAudioContext, requests: Iterable<S
 
 /** Synchronous version (offline rendering, short play-once jingles) */
 export function prepareSamplesSync(ctx: BaseAudioContext, requests: Iterable<SampleRequest>): void {
-  for (const { def, name, midi, layer } of requests) for (const v of variantsToRender(def, layer)) getSample(ctx, def, name, midi, v);
+  for (const { def, name, midi, layer, desk } of requests) for (const v of variantsToRender(def, layer)) getSample(ctx, def, name, midi, v, desk);
 }

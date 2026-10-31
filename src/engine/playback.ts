@@ -84,7 +84,7 @@ export class Playback {
     const meter = song.meter ?? 16;
     this.clock = tempoClock(song);
     this.loops = Math.max(1, options.loops ?? (song.loop === false ? 1 : Infinity));
-    this.sections = [song.intro?.length ? compileSection(song.intro, meter) : { duration: 0, notes: [], ducks: [] }, compileSection(song.tracks, meter)];
+    this.sections = [song.intro?.length ? compileSection(song.intro, meter) : { duration: 0, notes: [], ducks: [], desks: [] }, compileSection(song.tracks, meter)];
     const introSteps = this.sections[INTRO].duration;
     this.base = [0, introSteps];
     this.introDuration = this.clock.seconds(introSteps);
@@ -204,6 +204,7 @@ export class Playback {
     const vel = Math.min(1, n.velocity * (1 + (Math.random() - 0.5) * 0.1));
     const dur = this.span(section, n.time, n.time + n.duration);
     const transpose = track.transpose ?? 0;
+    const desk = this.sections[section].desks[n.track];
     const pitches = n.pitches.length ? n.pitches : [0];
     pitches.forEach((m, k) => {
       playNote(track.instrument, {
@@ -215,6 +216,7 @@ export class Playback {
         vel,
         bends: n.bends?.map(([s, bm]) => [this.span(section, n.time, n.time + s), bm + transpose] as [number, number]),
         params: track.params,
+        desk,
       });
     });
   }
