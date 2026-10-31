@@ -329,12 +329,16 @@ function firstDesk(sr: number, f: number, d: BowDef, loud: boolean, seed: number
   return { mean: Math.round(f * meanRatio(centsOf(p), L) * L) / L, vph: p.vph, rate };
 }
 
-/** A note from the top string's open pitch up is played on it (a quarter tone of slack, so its open note's sample counts): its bowing */
+/**
+ * A note from the top string's open pitch up is played on it (a quarter tone of slack, so its open note's sample counts): its bowing. A
+ * section's players keep their spread of bowing points around the top string's
+ */
 function topString(d: BowDef, f: number): BowDef {
   const s = d.top;
   if (!s || f < s.open * 0.97) return d;
-  const beta = s.beta * (f / s.open);
-  return { ...d, beta: [beta, beta], corner: [d.corner[0] * s.corner, d.corner[1] * s.corner], noise: d.noise * s.noise };
+  const mid = (d.beta[0] + d.beta[1]) / 2;
+  const beta = (b: number) => s.beta * (b / mid) * (f / s.open);
+  return { ...d, beta: [beta(d.beta[0]), beta(d.beta[1])], corner: [d.corner[0] * s.corner, d.corner[1] * s.corner], noise: d.noise * s.noise };
 }
 
 /**
@@ -650,7 +654,7 @@ export const BOWS = {
   /** Morin khuur: horsehair bow, lots of breath noise, wide slow vibrato that comes in later */
   morin: { def: { ...solo(MORIN_BODY, 4.4, 26, 0.15, [6, 11], 0.14), vibDelay: 0.18 }, zone: 3, rate: 0.75, attack: 0.03, release: 0.3, loudAt: 0.72, glide: 0.14, level: 0.81 },
   /** Cello section: five players, for sustained notes and harmony in the low-mid register (use cello for solos) */
-  celli: { def: { ...section(CELLO_BODY, 5), vibRate: 5.5, vibDepth: 20, corner: [7, 14], noise: 0.15 }, zone: 3, rate: 0.5, attack: 0.03, release: 0.4, loudAt: 0.72, glide: 0.1, level: 0.66 },
+  celli: { def: { ...section(CELLO_BODY, 5), vibRate: 5.5, vibDepth: 20, corner: [7, 14], noise: 0.15, top: CELLO_A }, zone: 3, rate: 0.5, attack: 0.03, release: 0.4, loudAt: 0.72, glide: 0.1, level: 0.66 },
   /** Double bass section: three players, with a slower vibrato */
   contrabass: { def: { ...section(BASS_BODY, 3), vibRate: 5, vibDepth: 14, corner: [8, 16], spread: 4 }, zone: 3, rate: 0.5, attack: 0.03, release: 0.35, loudAt: 0.72, glide: 0.1, level: 0.61 },
 } satisfies Record<string, BowInst>;
