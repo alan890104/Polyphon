@@ -107,20 +107,17 @@ class FallingNotes extends Layer2D {
     }
     const timeline = f.timeline;
     if (!timeline) return;
-    const bar = timeline.barSeconds;
-    const first = Math.ceil(f.position / bar);
-    const last = Math.floor((f.position + this.lookahead) / bar);
     g.font = `500 10px ${MONO}`;
     g.textAlign = 'left';
     g.textBaseline = 'bottom';
-    for (let b = first; b <= last; b++) {
-      const y = Math.round(hitY - (b * bar - f.position) * this.speed);
-      if (y < this.height * FADE) continue;
+    timeline.forEachBar(f.position, f.position + this.lookahead, (at, bar) => {
+      const y = Math.round(hitY - (at - f.position) * this.speed);
+      if (y < this.height * FADE) return;
       g.fillStyle = alpha(theme.muted, 0.16);
       g.fillRect(0, y, width, 1);
       g.fillStyle = alpha(theme.muted, 0.6);
-      g.fillText(String(b + 1), 8, y - 3);
-    }
+      g.fillText(String(bar), 8, y - 3);
+    });
   }
 
   /** Place every note in view; light the keys of sounding notes and throw sparks for the ones landing now. Returns the drum level. */

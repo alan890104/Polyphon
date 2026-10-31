@@ -134,7 +134,8 @@ Theory helpers: `midi('C#4')`, `frequency('A4')`, `noteName(61)`, `parseChord('F
 defineSong({
   title: 'Night Waltz',
   description: 'A minor, 3/4',
-  bpm: 84,
+  bpm: 84,                   // the tempo it starts at
+  tempo: [{ bar: 33, bpm: 72, over: 4 }],  // changes of tempo, below
   meter: '3/4',              // default '4/4'
   swing: 0,                  // eighth-note swing 0-0.5; swing16 for sixteenths
   reverb: { size: 2.6, damp: 0.5, preDelay: 0.02, early: 0.3, mix: 1 },
@@ -148,6 +149,20 @@ defineSong({
 ```
 
 A section lasts as long as its longest track, rounded up to whole bars; shorter tracks repeat to fill it unless they set `repeat: false`.
+
+The tempo can change along the way, at once or gradually. Bars count from 1 at the start of the song, the intro's first; a looping body plays its changes again on every pass.
+
+```ts
+tempo: [
+  { bar: 17, bpm: 66 },           // a new tempo from bar 17
+  { bar: 29, bpm: 50, over: 4 },  // ritardando: down to 50 across bars 29 to 32
+  { bar: 33, bpm: 84 },           // a tempo
+  { bar: 40.5, bpm: 40 },         // the second half of bar 40, held back: a fermata
+  { bar: 41, bpm: 84 },
+]
+```
+
+`tempoClock(song)` turns positions in the score into seconds and back, for anything that has to keep time with the music.
 
 A track:
 
@@ -275,7 +290,7 @@ const song = songFromMidi(await file.arrayBuffer(), { title: file.name });
 music.play(song);
 ```
 
-`songFromMidi` keeps tempo changes in real time and reads the time signature, the sustain pedal, volume and pan. General MIDI programs pick instruments from the orchestra, and channel 10 becomes the drum kit.
+`songFromMidi` keeps the notes on the file's beat grid and its tempo changes as the song's own, and reads the time signature, the sustain pedal, volume and pan. General MIDI programs pick instruments from the orchestra, and channel 10 becomes the drum kit.
 
 ```ts
 const buffer = await renderSong(song, { loops: 1 });  // OfflineAudioContext, faster than real time

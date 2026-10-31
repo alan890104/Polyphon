@@ -134,7 +134,8 @@ chords('Dm:12 A7:4 | %');                      // 明確寫長度；% 表示上�
 defineSong({
   title: 'Night Waltz',
   description: 'A 小調，3/4',
-  bpm: 84,
+  bpm: 84,                   // 開頭的速度
+  tempo: [{ bar: 33, bpm: 72, over: 4 }],  // 速度變化，見下方
   meter: '3/4',              // 預設 '4/4'
   swing: 0,                  // 八分音符搖擺 0-0.5；十六分音符用 swing16
   reverb: { size: 2.6, damp: 0.5, preDelay: 0.02, early: 0.3, mix: 1 },
@@ -148,6 +149,20 @@ defineSong({
 ```
 
 一個段落的長度等於最長的軌道（補足整小節），較短的軌道會重複填滿，除非設 `repeat: false`。
+
+速度可以在曲中改變，可以突然換，也可以逐漸變快變慢。小節從整首歌的開頭算起（前奏的小節在前），循環的主體每一輪都會重新走一次這些變化。
+
+```ts
+tempo: [
+  { bar: 17, bpm: 66 },           // 從第 17 小節起換成新速度
+  { bar: 29, bpm: 50, over: 4 },  // 漸慢：第 29 到 32 小節逐漸慢到 50
+  { bar: 33, bpm: 84 },           // 回原速
+  { bar: 40.5, bpm: 40 },         // 第 40 小節的後半放慢撐長：延長記號
+  { bar: 41, bpm: 84 },
+]
+```
+
+`tempoClock(song)` 可以把樂譜上的位置換算成秒數（也能反過來），給任何需要跟著音樂走的東西使用。
 
 軌道欄位：
 
@@ -275,7 +290,7 @@ const song = songFromMidi(await file.arrayBuffer(), { title: file.name });
 music.play(song);
 ```
 
-`songFromMidi` 會依實際時間保留速度變化，並讀取拍號、延音踏板、音量與聲像。General MIDI 音色會對應到樂團裡的樂器，第 10 頻道對應到鼓組。
+`songFromMidi` 會讓音符留在檔案的拍子格線上，速度變化則成為歌曲本身的速度變化，並讀取拍號、延音踏板、音量與聲像。General MIDI 音色會對應到樂團裡的樂器，第 10 頻道對應到鼓組。
 
 ```ts
 const buffer = await renderSong(song, { loops: 1 });  // OfflineAudioContext，比即時快

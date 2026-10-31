@@ -5,6 +5,7 @@ import { getInstrument } from '../instruments/registry.ts';
 import { playNote } from '../instruments/play.ts';
 import { stepsPerBar } from '../notation/part.ts';
 import { DEFAULT_REVERB, trackName, type Song, type Track } from '../song.ts';
+import { tempoClock, type TempoClock } from '../tempo.ts';
 import { pump, sweep } from './automation.ts';
 import { compileSection, type CompiledSection, type ScheduledNote } from './compile.ts';
 import { createMixer, type Strip } from './mixer.ts';
@@ -60,10 +61,13 @@ export class Playback {
   readonly startTime: number;
   /** Resolves when a song with an end reaches it (never resolves if stopped first) */
   readonly finished: Promise<void>;
+  /** The song's tempo: steps from the start of the song (the intro's, then one pass of the body's) as seconds, and back */
+  readonly clock: TempoClock;
 
   private readonly sections: [CompiledSection, CompiledSection];
   private readonly strips: [Strip[], Strip[]];
-  private readonly step: number;
+  /** Where each section starts on the clock, in steps */
+  private readonly base: [number, number];
   private readonly loops: number;
   private sec = INTRO;
   private idx = 0;
@@ -78,15 +82,17 @@ export class Playback {
     this.context = context;
     this.song = song;
     const meter = song.meter ?? 16;
-    this.step = 60 / song.bpm / 4;
+    this.clock = tempoClock(song);
     this.loops = Math.max(1, options.loops ?? (song.loop === false ? 1 : Infinity));
     this.sections = [song.intro?.length ? compileSection(song.intro, meter) : { duration: 0, notes: [], ducks: [] }, compileSection(song.tracks, meter)];
-    this.introDuration = this.sections[INTRO].duration * this.step;
-    this.loopDuration = this.sections[BODY].duration * this.step;
+    const introSteps = this.sections[INTRO].duration;
+    this.base = [0, introSteps];
+    this.introDuration = this.clock.seconds(introSteps);
+    this.loopDuration = this.clock.seconds(introSteps + this.sections[BODY].duration) - this.introDuration;
     this.duration = this.introDuration + this.loops * this.loopDuration;
     this.finished = new Promise((resolve) => (this.resolveFinished = resolve));
 
-    const mixer = createMixer(context, song, this.step, destination);
+    const mixer = createMixer(context, song, destination);
     this.output = mixer.output;
     this.strips = mixer.strips;
     this.tracks = [...trackHandles(song.intro ?? [], mixer.strips[INTRO], 'intro'), ...trackHandles(song.tracks, mixer.strips[BODY], 'loop')];
@@ -98,16 +104,11 @@ export class Playback {
       this.output.gain.setValueAtTime(0, at);
       this.output.gain.linearRampToValueAtTime(1, at + fadeIn);
     }
-    const from = Math.min(Math.max(0, options.from ?? 0), this.duration - this.step);
+    const from = Math.min(Math.max(0, options.from ?? 0), this.duration - 0.001);
     this.secStart = at;
-    if (from > 0) this.seek(from / this.step, at);
+    if (from > 0) this.seek(from, at);
     else this.sweep(0);
     this.startTime = at - from;
-  }
-
-  /** Seconds per sixteenth-note step */
-  get stepDuration(): number {
-    return this.step;
   }
 
   /** Still producing notes (not stopped, not past its end) */
@@ -128,7 +129,7 @@ export class Playback {
         this.duckUnder(n.track, at);
         this.idx++;
       }
-      const end = this.secStart + sec.duration * this.step;
+      const end = this.secStart + (this.sec === INTRO ? this.introDuration : this.loopDuration);
       if (end >= until) return;
       if (this.sec === BODY) {
         if (this.passes + 1 >= this.loops) {
@@ -150,11 +151,12 @@ export class Playback {
   position(time = this.context.currentTime): SongPosition {
     const sectionStart = this.sec === INTRO ? 0 : this.introDuration + this.passes * this.loopDuration;
     const seconds = Math.min(this.duration, Math.max(0, sectionStart + time - this.secStart));
-    const barSeconds = stepsPerBar(this.song.meter) * this.step;
-    if (seconds < this.introDuration) return { seconds, section: 'intro', bar: Math.floor(seconds / barSeconds) + 1, loop: 0 };
+    const bar = (step: number) => Math.floor(step / stepsPerBar(this.song.meter) + 1e-6) + 1;
+    if (seconds < this.introDuration) return { seconds, section: 'intro', bar: bar(this.clock.step(seconds)), loop: 0 };
     const inBody = seconds - this.introDuration;
     const loop = Math.min(Math.floor(inBody / this.loopDuration), this.loops - 1);
-    return { seconds, section: 'loop', bar: Math.floor((inBody - loop * this.loopDuration) / barSeconds) + 1, loop };
+    const step = this.clock.step(this.introDuration + inBody - loop * this.loopDuration) - this.base[BODY];
+    return { seconds, section: 'loop', bar: bar(step), loop };
   }
 
   /** Fade out and release */
@@ -178,7 +180,19 @@ export class Playback {
       if (swing && i % 4 === 2) s += swing * 2;
       else if (swing16 && i % 2 === 1) s += swing16;
     }
-    return this.secStart + s * this.step;
+    return this.at(s);
+  }
+
+  /** Context time of a step in the current section, on the grid */
+  private at(step: number): number {
+    const base = this.base[this.sec];
+    return this.secStart + this.clock.seconds(base + step) - this.clock.seconds(base);
+  }
+
+  /** Seconds between two steps of a section */
+  private span(section: number, from: number, to: number): number {
+    const base = this.base[section];
+    return this.clock.seconds(base + to) - this.clock.seconds(base + from);
   }
 
   private fire(section: number, n: ScheduledNote, at: number): void {
@@ -188,7 +202,7 @@ export class Playback {
     const humanize = track.humanize ?? (drum ? 0.003 : 0.008);
     const t = Math.max(this.context.currentTime + 0.005, at + (Math.random() - 0.5) * humanize);
     const vel = Math.min(1, n.velocity * (1 + (Math.random() - 0.5) * 0.1));
-    const dur = n.duration * this.step;
+    const dur = this.span(section, n.time, n.time + n.duration);
     const transpose = track.transpose ?? 0;
     const pitches = n.pitches.length ? n.pitches : [0];
     pitches.forEach((m, k) => {
@@ -199,23 +213,23 @@ export class Playback {
         dur,
         m: m ? m + transpose : 0,
         vel,
-        bends: n.bends?.map(([s, bm]) => [s * this.step, bm + transpose] as [number, number]),
+        bends: n.bends?.map(([s, bm]) => [this.span(section, n.time, n.time + s), bm + transpose] as [number, number]),
         params: track.params,
       });
     });
   }
 
-  /** Jump to a step counted from the start of the song; sustained notes already sounding at that point are picked up */
-  private seek(step: number, at: number): void {
-    const introSteps = this.sections[INTRO].duration;
-    let offset = step;
-    if (step >= introSteps) {
-      const bodySteps = this.sections[BODY].duration;
-      this.passes = Math.floor((step - introSteps) / bodySteps);
-      offset = step - introSteps - this.passes * bodySteps;
+  /** Jump to `seconds` into the song; sustained notes already sounding at that point are picked up */
+  private seek(seconds: number, at: number): void {
+    let into = seconds;
+    if (seconds >= this.introDuration) {
+      this.passes = Math.floor((seconds - this.introDuration) / this.loopDuration);
+      into = seconds - this.introDuration - this.passes * this.loopDuration;
       this.sec = BODY;
     }
-    this.secStart = at - offset * this.step;
+    const base = this.base[this.sec];
+    const offset = this.clock.step(this.clock.seconds(base) + into) - base;
+    this.secStart = at - into;
     const { notes, ducks } = this.sections[this.sec];
     /** The last hit of each track that others duck under */
     const hits = new Map<number, number>();
@@ -242,7 +256,7 @@ export class Playback {
   /** A pass of the current section begins (`from` steps in; `again` when it follows a pass of the same section): send its filters along their sweeps */
   private sweep(from: number, again = false): void {
     const { duration } = this.sections[this.sec];
-    for (const strip of this.strips[this.sec]) for (const s of strip.sweeps) sweep(s.cutoff, s.points, this.secStart, from, duration, this.step, again);
+    for (const strip of this.strips[this.sec]) for (const s of strip.sweeps) sweep(s.cutoff, s.points, from, duration, (step) => this.at(step), again);
   }
 
   private trackOf(section: number, index: number): Track {

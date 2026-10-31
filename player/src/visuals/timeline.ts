@@ -1,7 +1,7 @@
 // A song's notes on the clock: every note of the intro and the body in seconds, timed as the playback schedules them (swing, strums,
 // transposition), so visuals can show notes before they sound and land them exactly when they do.
 
-import { compileSection, stepsPerBar, type Song, type Track } from 'polyphon';
+import { compileSection, stepsPerBar, tempoClock, type Song, type Track } from 'polyphon';
 
 export interface TimedNote {
   /** Seconds from the start of its section */
@@ -17,6 +17,10 @@ export interface TimedNote {
 interface Section {
   /** Seconds */
   duration: number;
+  steps: number;
+  /** Seconds from the start of the section to a step, and back */
+  time: (step: number) => number;
+  step: (seconds: number) => number;
   /** Sorted by start */
   notes: TimedNote[];
   /** The longest note, so a window query knows how far back to look for notes still sounding */
@@ -40,8 +44,6 @@ export class NoteTimeline {
   readonly song: Song;
   /** Track group names, in the order their colours are given */
   readonly groups: readonly string[];
-  /** Seconds per bar */
-  readonly barSeconds: number;
   /** Seconds the intro lasts */
   readonly introDuration: number;
   /** Seconds one pass of the body lasts */
@@ -55,19 +57,22 @@ export class NoteTimeline {
   /** `passes`: how many times the body plays (the player plays it once, then moves on) */
   constructor(song: Song, passes = 1) {
     this.song = song;
-    const meter = song.meter ?? 16;
-    const step = 60 / song.bpm / 4;
+    const clock = tempoClock(song);
+    /** A section's clock, when it starts `base` steps into the song */
+    const sectionClock = (base: number) => ({
+      time: (step: number) => clock.seconds(base + step) - clock.seconds(base),
+      step: (seconds: number) => clock.step(clock.seconds(base) + seconds) - base,
+    });
     const groups: string[] = [];
     const groupOf = (track: Track) => {
       const name = track.name ?? track.instrument;
       const index = groups.indexOf(name);
       return index >= 0 ? index : groups.push(name) - 1;
     };
-    const intro = song.intro?.length ? compileTracks(song, song.intro, step, groupOf) : { duration: 0, notes: [], longest: 0 };
-    const body = compileTracks(song, song.tracks, step, groupOf);
+    const intro = song.intro?.length ? compileTracks(song, song.intro, sectionClock(0), groupOf) : { duration: 0, steps: 0, notes: [], longest: 0, ...sectionClock(0) };
+    const body = compileTracks(song, song.tracks, sectionClock(intro.steps), groupOf);
     this.sections = [intro, body];
     this.groups = groups;
-    this.barSeconds = stepsPerBar(meter) * step;
     this.introDuration = intro.duration;
     this.loopDuration = body.duration;
     this.passes = Math.max(1, passes);
@@ -100,6 +105,21 @@ export class NoteTimeline {
     const last = Math.min(this.passes - 1, Math.floor((to - this.introDuration) / body.duration));
     for (let pass = first; pass <= last; pass++) visitSection(body, this.introDuration + pass * body.duration, from, to, visit);
   }
+
+  /** Visit the bar lines in [from, to] (seconds into the song): when each bar starts, and its number, counted from 1 at the start of the song */
+  forEachBar(from: number, to: number, visit: (seconds: number, bar: number) => void): void {
+    const bar = stepsPerBar(this.song.meter);
+    const [intro, body] = this.sections;
+    const visitBars = (section: Section, offset: number, first: number) => {
+      if (to < offset || from >= offset + section.duration) return;
+      const lo = Math.ceil(section.step(Math.max(0, from - offset)) / bar - 1e-6);
+      const hi = Math.floor(section.step(Math.min(section.duration, to - offset)) / bar + 1e-6);
+      for (let b = lo; b <= hi && b * bar < section.steps; b++) visit(offset + section.time(b * bar), first + b);
+    };
+    visitBars(intro, 0, 1);
+    const introBars = intro.steps / bar;
+    for (let pass = 0; pass < this.passes; pass++) visitBars(body, this.introDuration + pass * body.duration, 1 + introBars + (pass * body.steps) / bar);
+  }
 }
 
 function visitSection(section: Section, offset: number, from: number, to: number, visit: (note: TimedNote, offset: number) => void): void {
@@ -122,7 +142,7 @@ function visitSection(section: Section, offset: number, from: number, to: number
 }
 
 /** One section's notes in seconds, the way the playback schedules them */
-function compileTracks(song: Song, tracks: Track[], step: number, groupOf: (track: Track) => number): Section {
+function compileTracks(song: Song, tracks: Track[], clock: Pick<Section, 'time' | 'step'>, groupOf: (track: Track) => number): Section {
   const compiled = compileSection(tracks, song.meter ?? 16);
   const groups = tracks.map(groupOf);
   const notes: TimedNote[] = [];
@@ -130,8 +150,8 @@ function compileTracks(song: Song, tracks: Track[], step: number, groupOf: (trac
   for (const n of compiled.notes) {
     const track = tracks[n.track];
     if (AMBIENCE.has(track.instrument)) continue;
-    const at = swungStep(song, n.time) * step;
-    const duration = n.duration * step;
+    const at = clock.time(swungStep(song, n.time));
+    const duration = clock.time(n.time + n.duration) - clock.time(n.time);
     longest = Math.max(longest, duration);
     const base = { velocity: n.velocity, track: groups[n.track] };
     if (!n.pitches.length || drumOf(track.instrument)) {
@@ -144,7 +164,7 @@ function compileTracks(song: Song, tracks: Track[], step: number, groupOf: (trac
     });
   }
   notes.sort((a, b) => a.start - b.start);
-  return { duration: compiled.duration * step, notes, longest };
+  return { duration: clock.time(compiled.duration), steps: compiled.duration, notes, longest, ...clock };
 }
 
 /** How heavy a hit an instrument plays, or null for one that plays notes */

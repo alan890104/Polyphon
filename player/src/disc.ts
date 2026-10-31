@@ -3,7 +3,7 @@
 // and the tune itself (the lead track) is punched in brass. Covers are drawn once and kept as image URLs; the Now playing disc and
 // the immersive view turn theirs under the comb and light each perforation as it passes.
 
-import { compileSection, type ScheduledNote, type Song, type Track } from 'polyphon';
+import { compileSection, tempoClock, type ScheduledNote, type Song, type Track } from 'polyphon';
 import { playable, trackName, type LibraryPlaylist, type ReadySong } from './library.ts';
 import { drumOf, swungStep, type Drum } from './visuals/timeline.ts';
 
@@ -279,9 +279,9 @@ function punch(song: Song): Perforation[] {
   const sections = [song.intro ?? [], song.tracks].filter((tracks) => tracks.length).map((tracks) => ({ tracks, ...compileSection(tracks, meter) }));
   const body = sections.at(-1);
   if (!body) return [];
-  const turn = sections.reduce((steps, s) => steps + s.duration, 0);
-  // Strums are in seconds, everything else here in steps
-  const stepSeconds = 60 / song.bpm / 4;
+  // The disc turns at an even speed, so a hole sits where its note falls in time (a slower passage is spread wider)
+  const clock = tempoClock(song);
+  const turn = clock.seconds(sections.reduce((steps, s) => steps + s.duration, 0));
   const tune = tuneTrack(body.tracks, body.notes);
   const holes: (Omit<Perforation, 'pitch'> & { midi: number | null })[] = [];
   let offset = 0;
@@ -290,9 +290,11 @@ function punch(song: Song): Perforation[] {
       const track = tracks[note.track];
       // A silent track only drives another's ducking: nothing is heard, so nothing is punched
       if (track.gain === 0) continue;
-      const at = offset + swungStep(song, note.time);
-      const strum = (note.strum ?? 0) / stepSeconds;
-      const hole = { length: Math.min(note.duration, LONGEST) / turn, velocity: note.velocity, lead: trackName(track) === tune };
+      const start = offset + note.time;
+      const at = clock.seconds(offset + swungStep(song, note.time));
+      const strum = note.strum ?? 0;
+      const length = clock.seconds(start + Math.min(note.duration, LONGEST)) - clock.seconds(start);
+      const hole = { length: length / turn, velocity: note.velocity, lead: trackName(track) === tune };
       // A drum's pitch only picks its sample: it is a hit on the drum ring, not a note on the tracks
       const drum = drumOf(track.instrument);
       if (drum || !note.pitches.length) holes.push({ ...hole, at: at / turn, midi: null, drum: drum ?? 'mid' });

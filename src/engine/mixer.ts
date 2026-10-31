@@ -33,7 +33,9 @@ export interface Strip {
 /** Q of the two stages of a 24 dB/octave filter, in dB as Web Audio reads it for low- and high-pass: Butterworth, with a touch of resonance */
 const FILTER_Q = [-5.3, 4];
 
-export function createMixer(ctx: BaseAudioContext, song: Song, stepSeconds: number, destination: AudioNode): Mixer {
+export function createMixer(ctx: BaseAudioContext, song: Song, destination: AudioNode): Mixer {
+  // The delay and the ducking keep time with the opening tempo
+  const stepSeconds = 60 / song.bpm / 4;
   const output = ctx.createGain();
   output.connect(destination);
   const master = createMaster(ctx, song, output);

@@ -14,6 +14,7 @@ export { stepsPerBar, VELOCITY, type Note, type Part, type Meter } from './notat
 export { midi, frequency, noteName, parseChord, voiceChord, scaleDegree, remapToMode, romanChord, MODES, type Pitch, type Mode, type ChordInfo, type VoicingOptions } from './theory.ts';
 
 export { defineSong, songDuration, DEFAULT_REVERB, type Song, type Track, type Reverb, type Delay, type Master, type Duck, type Sweep } from './song.ts';
+export { tempoClock, type TempoChange, type TempoClock } from './tempo.ts';
 
 export { Jukebox, type JukeboxOptions, type JukeboxState, type PlayOptions, type DuckOptions, type SongSource } from './engine/jukebox.ts';
 export { Playback, type PlaybackOptions, type PlaybackTrack, type SongPosition } from './engine/playback.ts';

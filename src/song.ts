@@ -4,13 +4,16 @@ import type { Room } from './instruments/dsp/reverb.ts';
 import type { InstrumentName } from './instruments/registry.ts';
 import { melody } from './notation/melody.ts';
 import { stepsPerBar, type Meter, type Part } from './notation/part.ts';
+import { tempoClock, type TempoChange } from './tempo.ts';
 
 export interface Song {
   title: string;
   /** One line on the mood and the instrumentation */
   description?: string;
-  /** Beats (quarter notes) per minute */
+  /** Beats (quarter notes) per minute: the tempo the song starts at */
   bpm: number;
+  /** Changes of tempo along the way: at once (a new section) or gliding (ritardando, accelerando) */
+  tempo?: TempoChange[];
   /** Time signature (default '4/4') */
   meter?: Meter;
   /** Eighth-note swing 0-0.5 (0.33 is roughly a triplet feel) */
@@ -69,7 +72,7 @@ export interface Reverb extends Room {
 }
 
 export interface Delay {
-  /** Delay time, in sixteenth-note steps */
+  /** Delay time, in sixteenth-note steps at the song's opening tempo */
   steps: number;
   /** Echo feedback 0-1 (default 0.35) */
   feedback?: number;
@@ -85,7 +88,7 @@ export interface Duck {
   by: string;
   /** How far the level dips, 0-1 (default 0.7) */
   depth?: number;
-  /** Steps until it is back up (default 4: a beat) */
+  /** Steps until it is back up, at the song's opening tempo (default 4: a beat) */
   release?: number;
 }
 
@@ -146,8 +149,10 @@ export function sectionSteps(parts: Part[], meter: Meter): number {
 
 /** How long the intro and one pass of the body last, in seconds */
 export function songDuration(song: Song): { intro: number; loop: number } {
-  const step = 60 / song.bpm / 4;
   const meter = song.meter ?? 16;
   const steps = (tracks: Track[]) => sectionSteps(tracks.map((t) => trackPart(t, meter)), meter);
-  return { intro: song.intro?.length ? steps(song.intro) * step : 0, loop: steps(song.tracks) * step };
+  const clock = tempoClock(song);
+  const introSteps = song.intro?.length ? steps(song.intro) : 0;
+  const intro = clock.seconds(introSteps);
+  return { intro, loop: clock.seconds(introSteps + steps(song.tracks)) - intro };
 }

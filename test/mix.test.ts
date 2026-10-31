@@ -90,6 +90,23 @@ test('pumps follow the kick through the intro and every loop, even with the kick
   assert.deepEqual(hits(events), [10.9, 11.9]);
 });
 
+test('a tempo change moves every hit after it; each pass of the body plays it again, and a seek lands in the right place', () => {
+  // The intro (bar 1) at 120 bpm, a beat every 0.5 s; the body (bar 2) at 60, a half note every 2 s. Starting at 1 s, the body starts at 3 s
+  const slower = defineSong({ ...song, tempo: [{ bar: 2, bpm: 60 }], tracks: song.tracks.map(({ lowpass, ...track }) => track) });
+  const { ctx } = fakeContext();
+  const playback = new Playback(ctx, ctx.destination, slower, { at: 1, loops: 2 });
+  playback.schedule(100);
+  assert.equal(playback.loopDuration, 4);
+  assert.deepEqual(hits(duckEvents(playback, 'intro', 'Pad')), [1, 1.5, 2, 2.5]);
+  assert.deepEqual(hits(duckEvents(playback, 'loop', 'Pad')), [3, 5, 7, 9]);
+  assert.deepEqual(playback.position(1 + 2 + 4 + 2.5), { seconds: 8.5, section: 'loop', bar: 1, loop: 1 });
+
+  // 2.5 s into the body is past its second hit: the next ones come with the second pass
+  const seeked = new Playback(ctx, ctx.destination, slower, { at: 10, from: 2 + 2.5, loops: 2 });
+  seeked.schedule(100);
+  assert.deepEqual(hits(duckEvents(seeked, 'loop', 'Pad')), [11.5, 13.5]);
+});
+
 test('a sweep holds before its first breakpoint and after its last, and glides evenly in pitch between', () => {
   const points = breakpoints({ 64: 3200, 0: 200, 32: 200 });
   assert.deepEqual(points, [[0, 200], [32, 200], [64, 3200]]);

@@ -50,16 +50,16 @@ export function cutoffAt(points: [number, number][], step: number): number {
 const GLIDE = 0.02;
 
 /**
- * Schedule one pass of a sweep through a section that starts at `start` (context seconds) and lasts `steps`, from `from` steps in.
+ * Schedule one pass of a sweep through a section that lasts `steps`, from `from` steps in; `time` gives the context time of a step.
  * A pass that follows another (`again`) glides back from where the last one ended: a filter retuned in one jump while it carries
  * sound thumps.
  */
-export function sweep(cutoff: AudioParam, points: [number, number][], start: number, from: number, steps: number, step: number, again = false): void {
-  const at = start + from * step;
+export function sweep(cutoff: AudioParam, points: [number, number][], from: number, steps: number, time: (step: number) => number, again = false): void {
+  const at = time(from);
   if (again) {
     cutoff.setValueAtTime(cutoffAt(points, steps), at);
     cutoff.exponentialRampToValueAtTime(cutoffAt(points, from), at + GLIDE);
   } else cutoff.setValueAtTime(cutoffAt(points, from), at);
   const knots = new Set(points.map(([s]) => Math.min(s, steps)).filter((s) => s > from));
-  for (const s of knots) cutoff.exponentialRampToValueAtTime(cutoffAt(points, s), start + s * step);
+  for (const s of knots) cutoff.exponentialRampToValueAtTime(cutoffAt(points, s), time(s));
 }
